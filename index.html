@@ -62,6 +62,33 @@
         .slide-leave-to { transform: translateY(10px); }
 
         .modal-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+
+        .sync-indicator {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .sync-connected {
+            background-color: #10B981;
+            color: white;
+        }
+        
+        .sync-disconnected {
+            background-color: #EF4444;
+            color: white;
+        }
+        
+        .sync-syncing {
+            background-color: #F59E0B;
+            color: white;
+        }
     </style>
 
     <script>
@@ -79,6 +106,19 @@
 </head>
 
 <body class="min-h-screen transition-colors duration-200" id="app">
+    <!-- Sync Status Indicator -->
+    <div class="sync-indicator" 
+         :class="{
+             'sync-connected': supabaseConnected && !isSyncing,
+             'sync-disconnected': !supabaseConnected,
+             'sync-syncing': isSyncing
+         }">
+        <i v-if="supabaseConnected && !isSyncing" class="fas fa-wifi mr-1"></i>
+        <i v-else-if="isSyncing" class="fas fa-sync-alt animate-spin mr-1"></i>
+        <i v-else class="fas fa-wifi-slash mr-1"></i>
+        {{ syncStatusText }}
+    </div>
+
     <!-- Loading Screen -->
     <div v-if="loading" class="fixed inset-0 bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center z-50">
         <div class="text-center text-white">
@@ -291,6 +331,13 @@
                         Masuk...
                     </span>
                 </button>
+                
+                <!-- Debug Info -->
+                <div v-if="isLoggedIn && isAdmin" class="mt-4 text-center">
+                    <button @click="testSync" class="text-sm text-blue-500 hover:text-blue-700">
+                        Test Sync
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1301,33 +1348,13 @@
         </div>
     </div>
 
-    <!-- Auto-save indicator -->
-    <transition name="fade">
-        <div v-if="autoSaving" class="fixed bottom-4 left-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg">
-            <i class="fas fa-sync-alt animate-spin mr-2"></i>
-            Menyimpan...
-        </div>
-    </transition>
-
     <script>
         const { createApp, ref, computed, onMounted, watch, reactive, nextTick } = Vue;
 
-        // Enhanced Supabase Configuration
+        // SUPABASE CONFIGURATION - FIXED
         const SUPABASE_CONFIG = {
-            url: 'https://zhcebnnggoheimkcqmbq.supabase.co',
-            key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpoY2Vibm5nZ29oZWlta2NxbWJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTQ1OTYsImV4cCI6MjA2ODI5MDU5Nn0.RyFTFfBXN1YNC9UZV2x1VUyZ1pTyzpCNmwGDhhRK_zs',
-            options: {
-                auth: {
-                    autoRefreshToken: true,
-                    persistSession: true,
-                    detectSessionInUrl: true
-                },
-                realtime: {
-                    params: {
-                        eventsPerSecond: 10
-                    }
-                }
-            }
+            url: 'https://yomyurzyuuhbxgvfujqv.supabase.co',
+            key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvbXl1cnp5dXVoYnhndmZ1anF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3NTg0MjUsImV4cCI6MjA2ODMzNDQyNX0.a4yRFDzdj8p5SIP--nBKItwVLtg_qB1ZS0G-NMf95k4'
         };
 
         const app = createApp({
@@ -1345,7 +1372,7 @@
                 const isLoggingIn = ref(false);
                 const loginError = ref('');
 
-                // Supabase
+                // Supabase state
                 const supabase = ref(null);
                 const supabaseConnected = ref(false);
                 const isSyncing = ref(false);
@@ -1356,6 +1383,7 @@
                 const editingEmployee = ref(null);
                 const showEmployeePassword = ref(false);
                 const showEditReport = ref(false);
+                const showPassword = ref(false);
 
                 // Forms
                 const credentials = reactive({
@@ -1409,55 +1437,21 @@
                         id: 'admin-1', username: 'admin', password: 'admin123', 
                         name: 'Administrator', email: 'admin@ibnukatsir.com',
                         position: 'Administrator', status: 'active', created_at: '2025-01-01'
-                    },
-                    { 
-                        id: 'emp-1', username: 'yuni', password: 'yuni123', 
-                        name: 'Yunita Damayanti', email: 'yuni@ibnukatsir.com',
-                        position: 'Sales Manager', status: 'active', created_at: '2025-01-01'
-                    },
-                    { 
-                        id: 'emp-2', username: 'qushay', password: 'qushay123', 
-                        name: 'Akhmad Qushayri', email: 'qushay@ibnukatsir.com',
-                        position: 'IT Developer', status: 'active', created_at: '2025-01-01'
-                    },
-                    { 
-                        id: 'emp-3', username: 'rendy', password: 'rendy123', 
-                        name: 'Rendy Febrian', email: 'rendy@ibnukatsir.com',
-                        position: 'Customer Service', status: 'active', created_at: '2025-01-01'
                     }
                 ]);
 
-                const kpiData = ref([
-                    {
-                        id: 'kpi-1',
-                        title: 'Meningkatkan Penjualan Q1',
-                        description: 'Target meningkatkan penjualan sebesar 20% di quarter pertama tahun ini',
-                        assignedTo: 'yuni',
-                        deadline: '2025-03-31',
-                        status: 'in-progress',
-                        createdAt: '2025-01-01',
-                        createdBy: 'admin'
-                    },
-                    {
-                        id: 'kpi-2',
-                        title: 'Optimasi Sistem Database',
-                        description: 'Melakukan optimasi performa database untuk meningkatkan response time aplikasi',
-                        assignedTo: 'qushay',
-                        deadline: '2025-02-15',
-                        status: 'pending',
-                        createdAt: '2025-01-05',
-                        createdBy: 'admin'
-                    }
-                ]);
-
+                const kpiData = ref([]);
                 const dailyReports = ref({});
                 const attendanceData = ref({});
                 const notifications = ref([]);
 
-                // Password visibility
-                const showPassword = ref(false);
-
                 // Computed properties
+                const syncStatusText = computed(() => {
+                    if (isSyncing.value) return 'Syncing...';
+                    if (supabaseConnected.value) return 'Online';
+                    return 'Offline';
+                });
+
                 const activeEmployees = computed(() => 
                     employees.value.filter(emp => emp.username !== 'admin' && (emp.status || 'active') === 'active')
                 );
@@ -1486,32 +1480,10 @@
                     kpiData.value.filter(kpi => kpi.status === 'pending').length
                 );
 
-                const completedKPIs = computed(() => 
-                    kpiData.value.filter(kpi => kpi.status === 'completed').length
-                );
-
-                const inProgressKPIs = computed(() => 
-                    kpiData.value.filter(kpi => kpi.status === 'in-progress').length
-                );
-
-                const overdueKPIs = computed(() => 
-                    kpiData.value.filter(kpi => kpi.status === 'overdue').length
-                );
-
                 const myKPIs = computed(() => {
                     if (!currentUser.value) return [];
                     updateKPIStatuses();
                     return kpiData.value.filter(kpi => kpi.assignedTo === currentUser.value.username);
-                });
-
-                const filteredKPIData = computed(() => {
-                    let filtered = kpiData.value;
-                    
-                    if (kpiFilter.employee) {
-                        filtered = filtered.filter(kpi => kpi.assignedTo === kpiFilter.employee);
-                    }
-                    
-                    return filtered;
                 });
 
                 const kpiProgress = computed(() => {
@@ -1520,66 +1492,6 @@
                     const completed = kpis.filter(kpi => kpi.status === 'completed').length;
                     return Math.round((completed / kpis.length) * 100);
                 });
-
-                const completedKPICount = computed(() => 
-                    myKPIs.value.filter(kpi => kpi.status === 'completed').length
-                );
-
-                const todayAttendance = computed(() => {
-                    if (!currentUser.value) return null;
-                    const today = getCurrentDate();
-                    return attendanceData.value[currentUser.value.username]?.[today] || null;
-                });
-
-                const todayReport = computed(() => {
-                    if (!currentUser.value) return null;
-                    const today = getCurrentDate();
-                    return dailyReports.value[currentUser.value.username]?.[today] || null;
-                });
-
-                const myAttendanceHistory = computed(() => {
-                    if (!currentUser.value) return [];
-                    const userAttendance = attendanceData.value[currentUser.value.username] || {};
-                    return Object.values(userAttendance).sort((a, b) => new Date(b.date) - new Date(a.date));
-                });
-
-                const myReports = computed(() => {
-                    if (!currentUser.value) return [];
-                    const userReports = dailyReports.value[currentUser.value.username] || {};
-                    return Object.values(userReports).sort((a, b) => new Date(b.date) - new Date(a.date));
-                });
-
-                const todayOfficeStats = computed(() => {
-                    const today = getCurrentDate();
-                    const stats = { present: 0, fieldDuty: 0, sick: 0, permit: 0 };
-                    
-                    activeEmployees.value.forEach(employee => {
-                        const attendance = attendanceData.value[employee.username]?.[today];
-                        if (attendance) {
-                            switch (attendance.status) {
-                                case 'on-time':
-                                case 'late':
-                                    stats.present++;
-                                    break;
-                                case 'field-duty':
-                                    stats.fieldDuty++;
-                                    break;
-                                case 'sick':
-                                    stats.sick++;
-                                    break;
-                                case 'permit':
-                                    stats.permit++;
-                                    break;
-                            }
-                        }
-                    });
-                    
-                    return stats;
-                });
-
-                const needsDescription = computed(() => 
-                    ['late', 'field-duty', 'sick', 'permit'].includes(attendanceForm.status)
-                );
 
                 const isEmployeeFormValid = computed(() => {
                     const form = employeeForm;
@@ -1606,106 +1518,7 @@
                     return true;
                 });
 
-                const filteredDailyReports = computed(() => {
-                    const allReports = [];
-                    
-                    Object.entries(dailyReports.value).forEach(([username, userReports]) => {
-                        Object.values(userReports).forEach(report => {
-                            allReports.push({
-                                ...report,
-                                id: `${username}-${report.date}`,
-                                employee: username
-                            });
-                        });
-                    });
-
-                    let filtered = allReports;
-
-                    if (reportFilter.date) {
-                        filtered = filtered.filter(report => report.date === reportFilter.date);
-                    }
-
-                    if (reportFilter.employee) {
-                        filtered = filtered.filter(report => report.employee === reportFilter.employee);
-                    }
-
-                    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                });
-
-                const filteredAttendanceRecords = computed(() => {
-                    const allAttendance = [];
-                    
-                    Object.entries(attendanceData.value).forEach(([username, userAttendance]) => {
-                        Object.values(userAttendance).forEach(attendance => {
-                            allAttendance.push({
-                                ...attendance,
-                                id: `${username}-${attendance.date}`,
-                                employee: username
-                            });
-                        });
-                    });
-
-                    let filtered = allAttendance;
-
-                    if (attendanceFilter.month) {
-                        const [year, month] = attendanceFilter.month.split('-');
-                        filtered = filtered.filter(attendance => {
-                            const [attYear, attMonth] = attendance.date.split('-');
-                            return attYear === year && attMonth === month;
-                        });
-                    }
-
-                    if (attendanceFilter.employee) {
-                        filtered = filtered.filter(attendance => attendance.employee === attendanceFilter.employee);
-                    }
-
-                    return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-                });
-
-                const monthlyAttendanceStats = computed(() => {
-                    const stats = {
-                        onTime: 0,
-                        late: 0,
-                        fieldDuty: 0,
-                        sick: 0,
-                        permit: 0,
-                        absent: 0
-                    };
-
-                    filteredAttendanceRecords.value.forEach(attendance => {
-                        switch (attendance.status) {
-                            case 'on-time':
-                                stats.onTime++;
-                                break;
-                            case 'late':
-                                stats.late++;
-                                break;
-                            case 'field-duty':
-                                stats.fieldDuty++;
-                                break;
-                            case 'sick':
-                                stats.sick++;
-                                break;
-                            case 'permit':
-                                stats.permit++;
-                                break;
-                        }
-                    });
-
-                    // Calculate absent days
-                    if (attendanceFilter.month && !attendanceFilter.employee) {
-                        const [year, month] = attendanceFilter.month.split('-');
-                        const daysInMonth = new Date(year, month, 0).getDate();
-                        const workDays = getWorkDaysInMonth(year, month);
-                        const expectedAttendance = workDays * activeEmployees.value.length;
-                        const totalAttendance = Object.values(stats).reduce((sum, val) => sum + val, 0);
-                        stats.absent = Math.max(0, expectedAttendance - totalAttendance);
-                    }
-
-                    return stats;
-                });
-
-                // Methods
+                // Helper functions
                 function getJakartaDate() {
                     const now = new Date();
                     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -1718,21 +1531,6 @@
 
                 function getCurrentMonth() {
                     return getJakartaDate().toISOString().split('T')[0].substring(0, 7);
-                }
-
-                function getWorkDaysInMonth(year, month) {
-                    let workDays = 0;
-                    const date = new Date(year, month - 1, 1);
-                    
-                    while (date.getMonth() === month - 1) {
-                        const dayOfWeek = date.getDay();
-                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                            workDays++;
-                        }
-                        date.setDate(date.getDate() + 1);
-                    }
-                    
-                    return workDays;
                 }
 
                 const getCurrentDateString = () => {
@@ -1779,17 +1577,7 @@
                     });
                 };
 
-                const toggleDarkMode = () => {
-                    darkMode.value = !darkMode.value;
-                    localStorage.setItem('darkMode', darkMode.value);
-                    
-                    if (darkMode.value) {
-                        document.documentElement.classList.add('dark');
-                    } else {
-                        document.documentElement.classList.remove('dark');
-                    }
-                };
-
+                // Notifications
                 const showNotification = (message, type = 'info', duration = 5000) => {
                     const id = Date.now() + Math.random();
                     const notification = { id, message, type };
@@ -1830,6 +1618,384 @@
                     return icons[type] || icons.info;
                 };
 
+                // SUPABASE FUNCTIONS - FIXED
+                const initSupabase = async () => {
+                    try {
+                        console.log('🔄 Initializing Supabase connection...');
+                        
+                        supabase.value = window.supabase.createClient(
+                            SUPABASE_CONFIG.url, 
+                            SUPABASE_CONFIG.key
+                        );
+                        
+                        // Test connection
+                        console.log('🔍 Testing Supabase connection...');
+                        const { data, error } = await supabase.value
+                            .from('employees')
+                            .select('id')
+                            .limit(1);
+
+                        if (error) {
+                            console.error('❌ Supabase connection test failed:', error);
+                            throw error;
+                        }
+
+                        supabaseConnected.value = true;
+                        console.log('✅ Supabase connected successfully');
+                        showNotification('Database terhubung', 'success');
+                        
+                        // Setup realtime subscriptions
+                        setupRealtimeSubscriptions();
+                        
+                        // Initial sync from Supabase
+                        await syncFromSupabase();
+                        
+                    } catch (error) {
+                        console.error('❌ Supabase initialization failed:', error);
+                        supabaseConnected.value = false;
+                        showNotification('Database offline, menggunakan penyimpanan lokal', 'warning');
+                    }
+                };
+
+                const setupRealtimeSubscriptions = () => {
+                    if (!supabase.value || !supabaseConnected.value) return;
+
+                    console.log('🔔 Setting up realtime subscriptions...');
+
+                    try {
+                        // Subscribe to all table changes
+                        const channel = supabase.value
+                            .channel('db-changes')
+                            .on('postgres_changes', 
+                                { event: '*', schema: 'public', table: 'employees' }, 
+                                (payload) => {
+                                    console.log('Employee change:', payload);
+                                    setTimeout(() => syncFromSupabase(), 500);
+                                }
+                            )
+                            .on('postgres_changes', 
+                                { event: '*', schema: 'public', table: 'kpi' }, 
+                                (payload) => {
+                                    console.log('KPI change:', payload);
+                                    setTimeout(() => syncFromSupabase(), 500);
+                                }
+                            )
+                            .on('postgres_changes', 
+                                { event: '*', schema: 'public', table: 'attendance' }, 
+                                (payload) => {
+                                    console.log('Attendance change:', payload);
+                                    setTimeout(() => syncFromSupabase(), 500);
+                                }
+                            )
+                            .on('postgres_changes', 
+                                { event: '*', schema: 'public', table: 'daily_reports' }, 
+                                (payload) => {
+                                    console.log('Report change:', payload);
+                                    setTimeout(() => syncFromSupabase(), 500);
+                                }
+                            )
+                            .subscribe((status) => {
+                                console.log('Realtime subscription status:', status);
+                            });
+
+                        realtimeSubscriptions.value = [channel];
+                        console.log('✅ Realtime subscriptions setup complete');
+                    } catch (error) {
+                        console.error('❌ Error setting up realtime subscriptions:', error);
+                    }
+                };
+
+                const syncFromSupabase = async () => {
+                    if (!supabaseConnected.value || isSyncing.value) return;
+                    
+                    isSyncing.value = true;
+                    console.log('🔄 Starting sync from Supabase...');
+                    
+                    try {
+                        // Sync employees
+                        const { data: employeesData, error: empError } = await supabase.value
+                            .from('employees')
+                            .select('*')
+                            .order('created_at', { ascending: true });
+
+                        if (empError) throw empError;
+
+                        if (employeesData && employeesData.length > 0) {
+                            const adminUser = employees.value.find(emp => emp.username === 'admin');
+                            const mergedEmployees = adminUser ? [adminUser] : [];
+                            
+                            employeesData.forEach(emp => {
+                                if (emp.username !== 'admin') {
+                                    mergedEmployees.push(emp);
+                                }
+                            });
+                            
+                            employees.value = mergedEmployees;
+                            console.log('✅ Employees synced:', employees.value.length);
+                        }
+
+                        // Sync KPI data
+                        const { data: kpiDataFromDB, error: kpiError } = await supabase.value
+                            .from('kpi')
+                            .select('*')
+                            .order('created_at', { ascending: true });
+
+                        if (kpiError) throw kpiError;
+
+                        if (kpiDataFromDB) {
+                            kpiData.value = kpiDataFromDB.map(kpi => ({
+                                ...kpi,
+                                assignedTo: kpi.assigned_to,
+                                createdAt: kpi.created_at,
+                                createdBy: kpi.created_by
+                            }));
+                            console.log('✅ KPI data synced:', kpiData.value.length);
+                        }
+
+                        // Sync attendance data
+                        const { data: attendanceDataFromDB, error: attError } = await supabase.value
+                            .from('attendance')
+                            .select('*')
+                            .order('date', { ascending: false });
+
+                        if (attError) throw attError;
+
+                        if (attendanceDataFromDB) {
+                            const reorganizedAttendance = {};
+                            attendanceDataFromDB.forEach(record => {
+                                if (!reorganizedAttendance[record.employee]) {
+                                    reorganizedAttendance[record.employee] = {};
+                                }
+                                reorganizedAttendance[record.employee][record.date] = record;
+                            });
+                            attendanceData.value = reorganizedAttendance;
+                            console.log('✅ Attendance data synced:', attendanceDataFromDB.length, 'records');
+                        }
+
+                        // Sync daily reports
+                        const { data: reportsDataFromDB, error: repError } = await supabase.value
+                            .from('daily_reports')
+                            .select('*')
+                            .order('date', { ascending: false });
+
+                        if (repError) throw repError;
+
+                        if (reportsDataFromDB) {
+                            const reorganizedReports = {};
+                            reportsDataFromDB.forEach(record => {
+                                if (!reorganizedReports[record.employee]) {
+                                    reorganizedReports[record.employee] = {};
+                                }
+                                reorganizedReports[record.employee][record.date] = {
+                                    ...record,
+                                    workingOn: record.working_on
+                                };
+                            });
+                            dailyReports.value = reorganizedReports;
+                            console.log('✅ Daily reports synced:', reportsDataFromDB.length, 'records');
+                        }
+
+                        saveToStorage();
+                        console.log('✅ Sync from Supabase completed successfully');
+                        
+                    } catch (error) {
+                        console.error('❌ Sync from Supabase error:', error);
+                        showNotification('Gagal sinkron dari database: ' + error.message, 'error');
+                    } finally {
+                        isSyncing.value = false;
+                    }
+                };
+
+                const syncToSupabase = async () => {
+                    if (!supabaseConnected.value || isSyncing.value) return;
+                    
+                    isSyncing.value = true;
+                    console.log('🔄 Starting sync to Supabase...');
+                    
+                    try {
+                        // Sync employees (exclude admin)
+                        const employeesToSync = employees.value.filter(emp => emp.username !== 'admin');
+                        
+                        if (employeesToSync.length > 0) {
+                            const employeesForDB = employeesToSync.map(emp => ({
+                                id: emp.id,
+                                username: emp.username,
+                                password: emp.password,
+                                name: emp.name,
+                                email: emp.email || null,
+                                position: emp.position || null,
+                                status: emp.status || 'active',
+                                created_at: emp.created_at || getCurrentDate()
+                            }));
+
+                            const { error: empError } = await supabase.value
+                                .from('employees')
+                                .upsert(employeesForDB, { 
+                                    onConflict: 'username',
+                                    ignoreDuplicates: false 
+                                });
+
+                            if (empError) throw empError;
+                            console.log('✅ Employees synced to database');
+                        }
+
+                        // Sync KPI data
+                        if (kpiData.value.length > 0) {
+                            const kpiForDB = kpiData.value.map(kpi => ({
+                                id: kpi.id,
+                                title: kpi.title,
+                                description: kpi.description || null,
+                                assigned_to: kpi.assignedTo,
+                                deadline: kpi.deadline,
+                                status: kpi.status || 'pending',
+                                created_at: kpi.createdAt,
+                                created_by: kpi.createdBy
+                            }));
+
+                            const { error: kpiError } = await supabase.value
+                                .from('kpi')
+                                .upsert(kpiForDB, { 
+                                    onConflict: 'id',
+                                    ignoreDuplicates: false 
+                                });
+
+                            if (kpiError) throw kpiError;
+                            console.log('✅ KPI data synced to database');
+                        }
+
+                        // Sync attendance data
+                        const attendanceArray = [];
+                        Object.entries(attendanceData.value).forEach(([username, dates]) => {
+                            Object.values(dates).forEach(attendance => {
+                                attendanceArray.push({
+                                    id: `${attendance.employee}-${attendance.date}`,
+                                    employee: attendance.employee,
+                                    date: attendance.date,
+                                    status: attendance.status,
+                                    description: attendance.description || null,
+                                    timestamp: attendance.timestamp
+                                });
+                            });
+                        });
+
+                        if (attendanceArray.length > 0) {
+                            const { error: attError } = await supabase.value
+                                .from('attendance')
+                                .upsert(attendanceArray, { 
+                                    onConflict: 'id',
+                                    ignoreDuplicates: false 
+                                });
+
+                            if (attError) throw attError;
+                            console.log('✅ Attendance data synced to database');
+                        }
+
+                        // Sync daily reports
+                        const reportsArray = [];
+                        Object.entries(dailyReports.value).forEach(([username, dates]) => {
+                            Object.values(dates).forEach(report => {
+                                reportsArray.push({
+                                    id: `${report.employee}-${report.date}`,
+                                    employee: report.employee,
+                                    date: report.date,
+                                    working_on: report.workingOn,
+                                    completed: report.completed,
+                                    timestamp: report.timestamp
+                                });
+                            });
+                        });
+
+                        if (reportsArray.length > 0) {
+                            const { error: repError } = await supabase.value
+                                .from('daily_reports')
+                                .upsert(reportsArray, { 
+                                    onConflict: 'id',
+                                    ignoreDuplicates: false 
+                                });
+
+                            if (repError) throw repError;
+                            console.log('✅ Daily reports synced to database');
+                        }
+
+                        console.log('✅ All data synced successfully to Supabase');
+                        showNotification('Data berhasil disinkronkan', 'success');
+                        
+                    } catch (error) {
+                        console.error('❌ Sync to Supabase error:', error);
+                        showNotification('Gagal sinkron ke database: ' + error.message, 'error');
+                    } finally {
+                        isSyncing.value = false;
+                    }
+                };
+
+                // Storage functions
+                const loadFromStorage = () => {
+                    try {
+                        const savedEmployees = localStorage.getItem('employees');
+                        if (savedEmployees) {
+                            const parsed = JSON.parse(savedEmployees);
+                            employees.value = parsed.filter(emp => emp.username && emp.name);
+                        }
+
+                        const savedKPIs = localStorage.getItem('kpiData');
+                        if (savedKPIs) {
+                            kpiData.value = JSON.parse(savedKPIs);
+                        }
+
+                        const savedReports = localStorage.getItem('dailyReports');
+                        if (savedReports) {
+                            dailyReports.value = JSON.parse(savedReports);
+                        }
+
+                        const savedAttendance = localStorage.getItem('attendanceData');
+                        if (savedAttendance) {
+                            attendanceData.value = JSON.parse(savedAttendance);
+                        }
+
+                        const savedDarkMode = localStorage.getItem('darkMode');
+                        if (savedDarkMode !== null) {
+                            darkMode.value = savedDarkMode === 'true';
+                            if (darkMode.value) {
+                                document.documentElement.classList.add('dark');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading from storage:', error);
+                    }
+                };
+
+                const saveToStorage = () => {
+                    try {
+                        localStorage.setItem('employees', JSON.stringify(employees.value));
+                        localStorage.setItem('kpiData', JSON.stringify(kpiData.value));
+                        localStorage.setItem('dailyReports', JSON.stringify(dailyReports.value));
+                        localStorage.setItem('attendanceData', JSON.stringify(attendanceData.value));
+                    } catch (error) {
+                        console.error('Error saving to storage:', error);
+                    }
+                };
+
+                const autoSave = async () => {
+                    autoSaving.value = true;
+                    
+                    try {
+                        saveToStorage();
+                        
+                        if (supabaseConnected.value && !isSyncing.value) {
+                            setTimeout(async () => {
+                                await syncToSupabase();
+                            }, 1000);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Auto-save error:', error);
+                    } finally {
+                        setTimeout(() => {
+                            autoSaving.value = false;
+                        }, 1500);
+                    }
+                };
+
                 // Authentication
                 const login = async () => {
                     loginError.value = '';
@@ -1859,6 +2025,11 @@
                     isLoggingIn.value = false;
                     
                     activeTab.value = isAdmin.value ? 'employee-management' : 'my-kpi';
+                    
+                    // Sync data setelah login
+                    if (supabaseConnected.value) {
+                        await syncFromSupabase();
+                    }
                 };
 
                 const logout = () => {
@@ -1870,6 +2041,17 @@
                     activeTab.value = 'my-kpi';
                     loginError.value = '';
                     resetForms();
+                };
+
+                const toggleDarkMode = () => {
+                    darkMode.value = !darkMode.value;
+                    localStorage.setItem('darkMode', darkMode.value);
+                    
+                    if (darkMode.value) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
                 };
 
                 // Employee Management
@@ -1937,6 +2119,7 @@
                                     employees.value[index].password = form.password.trim();
                                 }
                             }
+                            showNotification('Data pegawai berhasil diupdate', 'success');
                         } else {
                             const newEmployee = {
                                 id: 'emp-' + Date.now(),
@@ -1950,6 +2133,7 @@
                             };
                             
                             employees.value.push(newEmployee);
+                            showNotification('Pegawai baru berhasil ditambahkan', 'success');
                         }
 
                         autoSave();
@@ -1974,68 +2158,8 @@
                     if (confirm(`Apakah Anda yakin ingin ${action} pegawai ${employee.name}?`)) {
                         employee.status = newStatus;
                         autoSave();
+                        showNotification(`Pegawai ${employee.name} berhasil ${action === 'mengaktifkan' ? 'diaktifkan' : 'dinonaktifkan'}`, 'success');
                     }
-                };
-
-                const getEmployeeName = (username) => {
-                    const employee = employees.value.find(emp => emp.username === username);
-                    return employee ? employee.name : username;
-                };
-
-                const getEmployeeKPICount = (username, status = null) => {
-                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
-                    if (status) {
-                        return employeeKPIs.filter(kpi => kpi.status === status).length;
-                    }
-                    return employeeKPIs.length;
-                };
-
-                const getEmployeeKPIProgress = (username) => {
-                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
-                    if (employeeKPIs.length === 0) return 0;
-                    const completed = employeeKPIs.filter(kpi => kpi.status === 'completed').length;
-                    return Math.round((completed / employeeKPIs.length) * 100);
-                };
-
-                const getEmployeeMonthlyAttendance = (username) => {
-                    const stats = {
-                        'on-time': 0,
-                        'late': 0,
-                        'field-duty': 0,
-                        'sick': 0,
-                        'permit': 0,
-                        'total': 0
-                    };
-
-                    if (attendanceFilter.month) {
-                        const [year, month] = attendanceFilter.month.split('-');
-                        const userAttendance = attendanceData.value[username] || {};
-                        
-                        Object.entries(userAttendance).forEach(([date, attendance]) => {
-                            const [attYear, attMonth] = date.split('-');
-                            if (attYear === year && attMonth === month) {
-                                stats[attendance.status]++;
-                                if (['on-time', 'late', 'field-duty'].includes(attendance.status)) {
-                                    stats.total++;
-                                }
-                            }
-                        });
-                    }
-
-                    return stats;
-                };
-
-                const getEmployeeAttendancePercentage = (username) => {
-                    if (!attendanceFilter.month) return 0;
-                    
-                    const [year, month] = attendanceFilter.month.split('-');
-                    const workDays = getWorkDaysInMonth(year, month);
-                    const stats = getEmployeeMonthlyAttendance(username);
-                    
-                    if (workDays === 0) return 0;
-                    
-                    const attendedDays = stats.total;
-                    return Math.round((attendedDays / workDays) * 100);
                 };
 
                 // KPI Management
@@ -2068,8 +2192,10 @@
                     
                     if (kpi.status === 'completed') {
                         kpi.status = 'in-progress';
+                        showNotification('KPI dikembalikan ke status "Sedang Dikerjakan"', 'info');
                     } else {
                         kpi.status = 'completed';
+                        showNotification('Selamat! KPI berhasil diselesaikan', 'success');
                     }
                     
                     autoSave();
@@ -2095,6 +2221,7 @@
                     kpiData.value.push(newKPI);
                     resetKPIForm();
                     autoSave();
+                    showNotification('KPI baru berhasil ditambahkan', 'success');
                 };
 
                 const editKPI = (kpi) => {
@@ -2102,6 +2229,7 @@
                     if (newTitle && newTitle.trim()) {
                         kpi.title = newTitle.trim();
                         autoSave();
+                        showNotification('KPI berhasil diupdate', 'success');
                     }
                 };
 
@@ -2111,6 +2239,7 @@
                         if (index !== -1) {
                             kpiData.value.splice(index, 1);
                             autoSave();
+                            showNotification('KPI berhasil dihapus', 'success');
                         }
                     }
                 };
@@ -2124,7 +2253,7 @@
                     });
                 };
 
-                // Attendance
+                // Attendance functions
                 const getAttendanceStatusLabel = (status) => {
                     const labels = {
                         'on-time': 'Tepat Waktu',
@@ -2145,6 +2274,22 @@
                     };
                     return placeholders[status] || '';
                 };
+
+                const needsDescription = computed(() => 
+                    ['late', 'field-duty', 'sick', 'permit'].includes(attendanceForm.status)
+                );
+
+                const todayAttendance = computed(() => {
+                    if (!currentUser.value) return null;
+                    const today = getCurrentDate();
+                    return attendanceData.value[currentUser.value.username]?.[today] || null;
+                });
+
+                const myAttendanceHistory = computed(() => {
+                    if (!currentUser.value) return [];
+                    const userAttendance = attendanceData.value[currentUser.value.username] || {};
+                    return Object.values(userAttendance).sort((a, b) => new Date(b.date) - new Date(a.date));
+                });
 
                 const submitAttendance = async () => {
                     if (!attendanceForm.status) {
@@ -2179,6 +2324,7 @@
                     autoSave();
                     resetAttendanceForm();
                     isSubmitting.value = false;
+                    showNotification('Absensi berhasil dicatat', 'success');
                 };
 
                 const resetAttendanceForm = () => {
@@ -2188,12 +2334,19 @@
                     });
                 };
 
-                const getEmployeeTodayAttendance = (username) => {
-                    const today = getCurrentDate();
-                    return attendanceData.value[username]?.[today] || null;
-                };
-
                 // Daily Reports
+                const todayReport = computed(() => {
+                    if (!currentUser.value) return null;
+                    const today = getCurrentDate();
+                    return dailyReports.value[currentUser.value.username]?.[today] || null;
+                });
+
+                const myReports = computed(() => {
+                    if (!currentUser.value) return [];
+                    const userReports = dailyReports.value[currentUser.value.username] || {};
+                    return Object.values(userReports).sort((a, b) => new Date(b.date) - new Date(a.date));
+                });
+
                 const submitDailyReport = async () => {
                     if (!reportForm.workingOn.trim() || !reportForm.completed.trim()) {
                         showNotification('Lengkapi semua field laporan', 'error');
@@ -2224,6 +2377,7 @@
                     isSubmitting.value = false;
                     
                     showEditReport.value = false;
+                    showNotification(showEditReport.value ? 'Laporan berhasil diupdate' : 'Laporan berhasil dikirim', 'success');
                 };
 
                 const resetReportForm = () => {
@@ -2238,295 +2392,227 @@
                     resetReportForm();
                 };
 
-                // Storage and sync
-                const loadFromStorage = () => {
-                    try {
-                        const savedEmployees = localStorage.getItem('employees');
-                        if (savedEmployees) {
-                            const parsed = JSON.parse(savedEmployees);
-                            employees.value = parsed.filter(emp => emp.username && emp.name);
-                        }
+                // Helper functions for admin
+                const getEmployeeName = (username) => {
+                    const employee = employees.value.find(emp => emp.username === username);
+                    return employee ? employee.name : username;
+                };
 
-                        const savedKPIs = localStorage.getItem('kpiData');
-                        if (savedKPIs) {
-                            kpiData.value = JSON.parse(savedKPIs);
-                        }
+                const getEmployeeTodayAttendance = (username) => {
+                    const today = getCurrentDate();
+                    return attendanceData.value[username]?.[today] || null;
+                };
 
-                        const savedReports = localStorage.getItem('dailyReports');
-                        if (savedReports) {
-                            dailyReports.value = JSON.parse(savedReports);
-                        }
-
-                        const savedAttendance = localStorage.getItem('attendanceData');
-                        if (savedAttendance) {
-                            attendanceData.value = JSON.parse(savedAttendance);
-                        }
-
-                        const savedDarkMode = localStorage.getItem('darkMode');
-                        if (savedDarkMode !== null) {
-                            darkMode.value = savedDarkMode === 'true';
-                            if (darkMode.value) {
-                                document.documentElement.classList.add('dark');
+                const todayOfficeStats = computed(() => {
+                    const today = getCurrentDate();
+                    const stats = { present: 0, fieldDuty: 0, sick: 0, permit: 0 };
+                    
+                    activeEmployees.value.forEach(employee => {
+                        const attendance = attendanceData.value[employee.username]?.[today];
+                        if (attendance) {
+                            switch (attendance.status) {
+                                case 'on-time':
+                                case 'late':
+                                    stats.present++;
+                                    break;
+                                case 'field-duty':
+                                    stats.fieldDuty++;
+                                    break;
+                                case 'sick':
+                                    stats.sick++;
+                                    break;
+                                case 'permit':
+                                    stats.permit++;
+                                    break;
                             }
                         }
-                    } catch (error) {
-                        console.error('Error loading from storage:', error);
-                    }
-                };
-
-                const saveToStorage = () => {
-                    try {
-                        localStorage.setItem('employees', JSON.stringify(employees.value));
-                        localStorage.setItem('kpiData', JSON.stringify(kpiData.value));
-                        localStorage.setItem('dailyReports', JSON.stringify(dailyReports.value));
-                        localStorage.setItem('attendanceData', JSON.stringify(attendanceData.value));
-                    } catch (error) {
-                        console.error('Error saving to storage:', error);
-                    }
-                };
-
-                const autoSave = async () => {
-                    autoSaving.value = true;
-                    saveToStorage();
+                    });
                     
-                    // Auto sync to Supabase if connected
-                    if (supabaseConnected.value && !isSyncing.value) {
-                        await syncToSupabase();
+                    return stats;
+                });
+
+                // Admin computed properties
+                const completedKPIs = computed(() => 
+                    kpiData.value.filter(kpi => kpi.status === 'completed').length
+                );
+
+                const inProgressKPIs = computed(() => 
+                    kpiData.value.filter(kpi => kpi.status === 'in-progress').length
+                );
+
+                const overdueKPIs = computed(() => 
+                    kpiData.value.filter(kpi => kpi.status === 'overdue').length
+                );
+
+                const filteredKPIData = computed(() => {
+                    let filtered = kpiData.value;
+                    
+                    if (kpiFilter.employee) {
+                        filtered = filtered.filter(kpi => kpi.assignedTo === kpiFilter.employee);
                     }
                     
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    autoSaving.value = false;
+                    return filtered;
+                });
+
+                const filteredDailyReports = computed(() => {
+                    const allReports = [];
+                    
+                    Object.entries(dailyReports.value).forEach(([username, userReports]) => {
+                        Object.values(userReports).forEach(report => {
+                            allReports.push({
+                                ...report,
+                                id: `${username}-${report.date}`,
+                                employee: username
+                            });
+                        });
+                    });
+
+                    let filtered = allReports;
+
+                    if (reportFilter.date) {
+                        filtered = filtered.filter(report => report.date === reportFilter.date);
+                    }
+
+                    if (reportFilter.employee) {
+                        filtered = filtered.filter(report => report.employee === reportFilter.employee);
+                    }
+
+                    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                });
+
+                const getEmployeeKPICount = (username, status = null) => {
+                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
+                    if (status) {
+                        return employeeKPIs.filter(kpi => kpi.status === status).length;
+                    }
+                    return employeeKPIs.length;
                 };
 
-                const initSupabase = async () => {
-                    try {
-                        if (SUPABASE_CONFIG.url.includes('your-project') || SUPABASE_CONFIG.key.includes('your-anon-key')) {
-                            console.warn('Supabase not configured properly. Using local storage only.');
-                            return;
+                const getEmployeeKPIProgress = (username) => {
+                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
+                    if (employeeKPIs.length === 0) return 0;
+                    const completed = employeeKPIs.filter(kpi => kpi.status === 'completed').length;
+                    return Math.round((completed / employeeKPIs.length) * 100);
+                };
+
+                // Attendance recap
+                const filteredAttendanceRecords = computed(() => {
+                    const allAttendance = [];
+                    
+                    Object.entries(attendanceData.value).forEach(([username, userAttendance]) => {
+                        Object.values(userAttendance).forEach(attendance => {
+                            allAttendance.push({
+                                ...attendance,
+                                id: `${username}-${attendance.date}`,
+                                employee: username
+                            });
+                        });
+                    });
+
+                    let filtered = allAttendance;
+
+                    if (attendanceFilter.month) {
+                        const [year, month] = attendanceFilter.month.split('-');
+                        filtered = filtered.filter(attendance => {
+                            const [attYear, attMonth] = attendance.date.split('-');
+                            return attYear === year && attMonth === month;
+                        });
+                    }
+
+                    if (attendanceFilter.employee) {
+                        filtered = filtered.filter(attendance => attendance.employee === attendanceFilter.employee);
+                    }
+
+                    return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+                });
+
+                const monthlyAttendanceStats = computed(() => {
+                    const stats = {
+                        onTime: 0,
+                        late: 0,
+                        fieldDuty: 0,
+                        sick: 0,
+                        permit: 0,
+                        absent: 0
+                    };
+
+                    filteredAttendanceRecords.value.forEach(attendance => {
+                        switch (attendance.status) {
+                            case 'on-time':
+                                stats.onTime++;
+                                break;
+                            case 'late':
+                                stats.late++;
+                                break;
+                            case 'field-duty':
+                                stats.fieldDuty++;
+                                break;
+                            case 'sick':
+                                stats.sick++;
+                                break;
+                            case 'permit':
+                                stats.permit++;
+                                break;
                         }
+                    });
 
-                        supabase.value = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key, SUPABASE_CONFIG.options);
+                    return stats;
+                });
+
+                const getEmployeeMonthlyAttendance = (username) => {
+                    const stats = {
+                        'on-time': 0,
+                        'late': 0,
+                        'field-duty': 0,
+                        'sick': 0,
+                        'permit': 0,
+                        'total': 0
+                    };
+
+                    if (attendanceFilter.month) {
+                        const [year, month] = attendanceFilter.month.split('-');
+                        const userAttendance = attendanceData.value[username] || {};
                         
-                        // Test connection
-                        const { data, error } = await supabase.value
-                            .from('employees')
-                            .select('count')
-                            .limit(1);
-
-                        if (!error) {
-                            supabaseConnected.value = true;
-                            console.log('Supabase connected successfully');
-                            
-                            // Setup realtime subscriptions
-                            setupRealtimeSubscriptions();
-                            
-                            // Initial sync from Supabase
-                            await syncFromSupabase();
-                        }
-                    } catch (error) {
-                        console.warn('Supabase initialization failed:', error);
-                    }
-                };
-
-                const setupRealtimeSubscriptions = () => {
-                    if (!supabase.value || !supabaseConnected.value) return;
-
-                    // Subscribe to employees table changes
-                    const employeesSubscription = supabase.value
-                        .channel('employees-changes')
-                        .on('postgres_changes', 
-                            { event: '*', schema: 'public', table: 'employees' }, 
-                            (payload) => {
-                                console.log('Employee change received:', payload);
-                                handleRealtimeUpdate('employees', payload);
-                            }
-                        )
-                        .subscribe();
-
-                    // Subscribe to KPI table changes
-                    const kpiSubscription = supabase.value
-                        .channel('kpi-changes')
-                        .on('postgres_changes', 
-                            { event: '*', schema: 'public', table: 'kpi' }, 
-                            (payload) => {
-                                console.log('KPI change received:', payload);
-                                handleRealtimeUpdate('kpi', payload);
-                            }
-                        )
-                        .subscribe();
-
-                    // Subscribe to attendance table changes
-                    const attendanceSubscription = supabase.value
-                        .channel('attendance-changes')
-                        .on('postgres_changes', 
-                            { event: '*', schema: 'public', table: 'attendance' }, 
-                            (payload) => {
-                                console.log('Attendance change received:', payload);
-                                handleRealtimeUpdate('attendance', payload);
-                            }
-                        )
-                        .subscribe();
-
-                    // Subscribe to daily reports table changes
-                    const reportsSubscription = supabase.value
-                        .channel('reports-changes')
-                        .on('postgres_changes', 
-                            { event: '*', schema: 'public', table: 'daily_reports' }, 
-                            (payload) => {
-                                console.log('Report change received:', payload);
-                                handleRealtimeUpdate('reports', payload);
-                            }
-                        )
-                        .subscribe();
-
-                    realtimeSubscriptions.value = [
-                        employeesSubscription,
-                        kpiSubscription,
-                        attendanceSubscription,
-                        reportsSubscription
-                    ];
-                };
-
-                const handleRealtimeUpdate = async (table, payload) => {
-                    // Re-sync data from Supabase when changes are detected
-                    console.log(`Handling realtime update for ${table}:`, payload);
-                    await syncFromSupabase();
-                };
-
-                const syncFromSupabase = async () => {
-                    if (!supabaseConnected.value) return;
-                    
-                    try {
-                        // Sync employees
-                        const { data: employeesData, error: empError } = await supabase.value
-                            .from('employees')
-                            .select('*');
-
-                        if (!empError && employeesData) {
-                            // Merge with local data, keeping admin user
-                            const adminUser = employees.value.find(emp => emp.username === 'admin');
-                            employees.value = [adminUser, ...employeesData];
-                        }
-
-                        // Sync KPI data
-                        const { data: kpiDataFromDB, error: kpiError } = await supabase.value
-                            .from('kpi')
-                            .select('*');
-
-                        if (!kpiError && kpiDataFromDB) {
-                            kpiData.value = kpiDataFromDB;
-                        }
-
-                        // Sync attendance data
-                        const { data: attendanceDataFromDB, error: attError } = await supabase.value
-                            .from('attendance')
-                            .select('*');
-
-                        if (!attError && attendanceDataFromDB) {
-                            // Reorganize attendance data by username and date
-                            const reorganizedAttendance = {};
-                            attendanceDataFromDB.forEach(record => {
-                                if (!reorganizedAttendance[record.employee]) {
-                                    reorganizedAttendance[record.employee] = {};
+                        Object.entries(userAttendance).forEach(([date, attendance]) => {
+                            const [attYear, attMonth] = date.split('-');
+                            if (attYear === year && attMonth === month) {
+                                stats[attendance.status]++;
+                                if (['on-time', 'late', 'field-duty'].includes(attendance.status)) {
+                                    stats.total++;
                                 }
-                                reorganizedAttendance[record.employee][record.date] = record;
-                            });
-                            attendanceData.value = reorganizedAttendance;
-                        }
-
-                        // Sync daily reports
-                        const { data: reportsDataFromDB, error: repError } = await supabase.value
-                            .from('daily_reports')
-                            .select('*');
-
-                        if (!repError && reportsDataFromDB) {
-                            // Reorganize reports data by username and date
-                            const reorganizedReports = {};
-                            reportsDataFromDB.forEach(record => {
-                                if (!reorganizedReports[record.employee]) {
-                                    reorganizedReports[record.employee] = {};
-                                }
-                                reorganizedReports[record.employee][record.date] = record;
-                            });
-                            dailyReports.value = reorganizedReports;
-                        }
-
-                        saveToStorage(); // Update local storage with synced data
-                    } catch (error) {
-                        console.error('Sync from Supabase error:', error);
+                            }
+                        });
                     }
+
+                    return stats;
                 };
 
-                const syncToSupabase = async () => {
-                    if (!supabaseConnected.value || isSyncing.value) return;
+                const getWorkDaysInMonth = (year, month) => {
+                    let workDays = 0;
+                    const date = new Date(year, month - 1, 1);
                     
-                    isSyncing.value = true;
-                    
-                    try {
-                        // Sync employees (exclude admin)
-                        const employeesToSync = employees.value.filter(emp => emp.username !== 'admin');
-                        if (employeesToSync.length > 0) {
-                            const { error: empError } = await supabase.value
-                                .from('employees')
-                                .upsert(employeesToSync, { onConflict: 'username' });
-
-                            if (empError) throw empError;
+                    while (date.getMonth() === month - 1) {
+                        const dayOfWeek = date.getDay();
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                            workDays++;
                         }
-
-                        // Sync KPI data
-                        if (kpiData.value.length > 0) {
-                            const { error: kpiError } = await supabase.value
-                                .from('kpi')
-                                .upsert(kpiData.value, { onConflict: 'id' });
-
-                            if (kpiError) throw kpiError;
-                        }
-
-                        // Sync attendance data
-                        const attendanceArray = [];
-                        Object.entries(attendanceData.value).forEach(([username, dates]) => {
-                            Object.values(dates).forEach(attendance => {
-                                attendanceArray.push({
-                                    ...attendance,
-                                    id: `${attendance.employee}-${attendance.date}`
-                                });
-                            });
-                        });
-
-                        if (attendanceArray.length > 0) {
-                            const { error: attError } = await supabase.value
-                                .from('attendance')
-                                .upsert(attendanceArray, { onConflict: 'id' });
-
-                            if (attError) throw attError;
-                        }
-
-                        // Sync daily reports
-                        const reportsArray = [];
-                        Object.entries(dailyReports.value).forEach(([username, dates]) => {
-                            Object.values(dates).forEach(report => {
-                                reportsArray.push({
-                                    ...report,
-                                    id: `${report.employee}-${report.date}`
-                                });
-                            });
-                        });
-
-                        if (reportsArray.length > 0) {
-                            const { error: repError } = await supabase.value
-                                .from('daily_reports')
-                                .upsert(reportsArray, { onConflict: 'id' });
-
-                            if (repError) throw repError;
-                        }
-
-                        console.log('Data synced successfully to Supabase');
-                    } catch (error) {
-                        console.error('Sync error:', error);
-                        // Don't show notification for auto-sync errors
-                    } finally {
-                        isSyncing.value = false;
+                        date.setDate(date.getDate() + 1);
                     }
+                    
+                    return workDays;
+                };
+
+                const getEmployeeAttendancePercentage = (username) => {
+                    if (!attendanceFilter.month) return 0;
+                    
+                    const [year, month] = attendanceFilter.month.split('-');
+                    const workDays = getWorkDaysInMonth(year, month);
+                    const stats = getEmployeeMonthlyAttendance(username);
+                    
+                    if (workDays === 0) return 0;
+                    
+                    const attendedDays = stats.total;
+                    return Math.round((attendedDays / workDays) * 100);
                 };
 
                 const resetForms = () => {
@@ -2535,8 +2621,19 @@
                     resetAttendanceForm();
                 };
 
+                // Test function
+                const testSync = async () => {
+                    console.log('🧪 Testing sync...');
+                    await syncToSupabase();
+                    setTimeout(async () => {
+                        await syncFromSupabase();
+                    }, 2000);
+                };
+
                 // Lifecycle
                 onMounted(async () => {
+                    console.log('🚀 App is mounting...');
+                    
                     loadFromStorage();
                     await initSupabase();
                     
@@ -2545,22 +2642,30 @@
                     
                     // Auto-save interval
                     setInterval(() => {
-                        if (isLoggedIn.value) {
+                        if (isLoggedIn.value && !autoSaving.value) {
                             saveToStorage();
                         }
                     }, 30000);
+                    
+                    // Periodic sync
+                    setInterval(async () => {
+                        if (supabaseConnected.value && !isSyncing.value && isLoggedIn.value) {
+                            await syncFromSupabase();
+                        }
+                    }, 300000); // 5 minutes
                     
                     setTimeout(() => {
                         loading.value = false;
                     }, 1500);
                 });
 
-                // Cleanup on unmount
+                // Cleanup
                 watch(isLoggedIn, (newVal) => {
                     if (!newVal && realtimeSubscriptions.value.length > 0) {
-                        // Unsubscribe from all realtime channels
                         realtimeSubscriptions.value.forEach(sub => {
-                            supabase.value.removeChannel(sub);
+                            if (supabase.value && sub) {
+                                supabase.value.removeChannel(sub);
+                            }
                         });
                         realtimeSubscriptions.value = [];
                     }
@@ -2583,6 +2688,7 @@
                     // Supabase
                     supabaseConnected,
                     isSyncing,
+                    syncStatusText,
                     
                     // UI state
                     showEmployeeModal,
@@ -2620,7 +2726,7 @@
                     myKPIs,
                     filteredKPIData,
                     kpiProgress,
-                    completedKPICount,
+                    completedKPICount: computed(() => myKPIs.value.filter(kpi => kpi.status === 'completed').length),
                     todayAttendance,
                     todayReport,
                     myAttendanceHistory,
@@ -2670,8 +2776,10 @@
                     submitDailyReport,
                     resetReportForm,
                     cancelEditReport,
+                    resetForms,
+                    testSync,
                     syncToSupabase,
-                    resetForms
+                    syncFromSupabase
                 };
             }
         });
