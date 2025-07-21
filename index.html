@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KPI System - Enhanced Version</title>
+    <title>KPI System - Enhanced Version with Recurring KPI</title>
     
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -38,6 +38,9 @@
         .dark .kpi-completed { background-color: #064E3B !important; color: #A7F3D0 !important; }
         .kpi-overdue { background-color: #FECACA !important; color: #991B1B !important; }
         .dark .kpi-overdue { background-color: #7F1D1D !important; color: #FCA5A5 !important; }
+
+        .kpi-recurring { background-color: #E0E7FF !important; color: #5B21B6 !important; }
+        .dark .kpi-recurring { background-color: #4C1D95 !important; color: #C4B5FD !important; }
 
         .att-on-time { background-color: #D1FAE5 !important; color: #065F46 !important; }
         .dark .att-on-time { background-color: #064E3B !important; color: #A7F3D0 !important; }
@@ -88,6 +91,11 @@
         .sync-syncing {
             background-color: #F59E0B;
             color: white;
+        }
+
+        .recurring-pattern {
+            background: linear-gradient(45deg, transparent 25%, rgba(139, 92, 246, 0.1) 25%, rgba(139, 92, 246, 0.1) 50%, transparent 50%, transparent 75%, rgba(139, 92, 246, 0.1) 75%);
+            background-size: 8px 8px;
         }
     </style>
 
@@ -570,18 +578,67 @@
                                               rows="3"
                                               placeholder="Jelaskan detail KPI yang harus dicapai..."></textarea>
                                 </div>
+                                
+                                <!-- NEW: KPI Type Selection -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Deadline</label>
-                                    <input type="date" 
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        <i class="fas fa-repeat mr-1"></i>Jenis KPI
+                                    </label>
+                                    <div class="grid grid-cols-1 gap-2">
+                                        <label class="flex items-center p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                               :class="kpiForm.recurringType === 'once' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : ''">
+                                            <input type="radio" v-model="kpiForm.recurringType" value="once" class="hidden">
+                                            <div class="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 rounded-full mr-3 flex items-center justify-center"
+                                                 :class="kpiForm.recurringType === 'once' ? 'border-primary-500' : ''">
+                                                <div v-if="kpiForm.recurringType === 'once'" class="w-2 h-2 bg-primary-500 rounded-full"></div>
+                                            </div>
+                                            <div>
+                                                <div class="font-medium text-gray-900 dark:text-white">KPI Sekali Saja</div>
+                                                <div class="text-sm text-gray-600 dark:text-gray-400">KPI untuk periode tertentu saja</div>
+                                            </div>
+                                        </label>
+                                        
+                                        <label class="flex items-center p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                               :class="kpiForm.recurringType === 'monthly' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : ''">
+                                            <input type="radio" v-model="kpiForm.recurringType" value="monthly" class="hidden">
+                                            <div class="w-4 h-4 border-2 border-gray-300 dark:border-gray-600 rounded-full mr-3 flex items-center justify-center"
+                                                 :class="kpiForm.recurringType === 'monthly' ? 'border-primary-500' : ''">
+                                                <div v-if="kpiForm.recurringType === 'monthly'" class="w-2 h-2 bg-primary-500 rounded-full"></div>
+                                            </div>
+                                            <div>
+                                                <div class="font-medium text-gray-900 dark:text-white">KPI Berulang Bulanan</div>
+                                                <div class="text-sm text-gray-600 dark:text-gray-400">Otomatis dibuat setiap bulan</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {{ kpiForm.recurringType === 'monthly' ? 'Tanggal Deadline (setiap bulan)' : 'Deadline' }}
+                                    </label>
+                                    <input v-if="kpiForm.recurringType === 'monthly'" 
+                                           type="number" 
+                                           v-model="kpiForm.monthlyDeadlineDay"
+                                           min="1" max="31"
+                                           class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                           placeholder="Contoh: 25 (untuk tanggal 25 setiap bulan)">
+                                    <input v-else
+                                           type="date" 
                                            v-model="kpiForm.deadline"
                                            :min="getCurrentDate()"
                                            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                    <div v-if="kpiForm.recurringType === 'monthly'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        KPI akan otomatis dibuat setiap bulan dengan deadline pada tanggal yang ditentukan
+                                    </div>
                                 </div>
-                                <div class="flex items-end">
+                                
+                                <div class="md:col-span-2 flex items-end">
                                     <button @click="addKPI()" 
-                                            :disabled="!kpiForm.title || !kpiForm.assignedTo || !kpiForm.deadline"
+                                            :disabled="!isKPIFormValid"
                                             class="w-full px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                         <i class="fas fa-plus mr-2"></i>Tambah KPI
+                                        <span v-if="kpiForm.recurringType === 'monthly'" class="ml-2 text-sm opacity-90">(Berulang)</span>
                                     </button>
                                 </div>
                             </div>
@@ -603,6 +660,15 @@
                                             </option>
                                         </select>
                                     </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filter Jenis</label>
+                                        <select v-model="kpiFilter.type" 
+                                                class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                            <option value="">Semua Jenis</option>
+                                            <option value="once">Sekali Saja</option>
+                                            <option value="monthly">Berulang Bulanan</option>
+                                        </select>
+                                    </div>
                                     <div class="text-sm text-gray-600 dark:text-gray-400 mt-6">
                                         Total: {{ filteredKPIData.length }} KPI
                                     </div>
@@ -610,7 +676,9 @@
                             </div>
                             
                             <div class="space-y-4">
-                                <div v-for="kpi in filteredKPIData" :key="kpi.id" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                <div v-for="kpi in filteredKPIData" :key="kpi.id" 
+                                     class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+                                     :class="kpi.isRecurring ? 'recurring-pattern' : ''">
                                     <div class="flex items-start justify-between">
                                         <div class="flex-1">
                                             <div class="flex items-center space-x-3 mb-2">
@@ -623,6 +691,9 @@
                                                           'kpi-overdue': kpi.status === 'overdue'
                                                       }">
                                                     {{ getKPIStatusLabel(kpi.status) }}
+                                                </span>
+                                                <span v-if="kpi.isRecurring" class="px-2 py-1 text-xs font-medium rounded-full kpi-recurring">
+                                                    <i class="fas fa-repeat mr-1"></i>Berulang
                                                 </span>
                                             </div>
                                             <p class="text-gray-600 dark:text-gray-400 mb-3">{{ kpi.description }}</p>
@@ -638,6 +709,10 @@
                                                 <div>
                                                     <i class="fas fa-clock mr-1"></i>
                                                     Dibuat: {{ formatDate(kpi.createdAt) }}
+                                                </div>
+                                                <div v-if="kpi.isRecurring">
+                                                    <i class="fas fa-repeat mr-1"></i>
+                                                    Setiap tanggal {{ kpi.monthlyDeadlineDay }}
                                                 </div>
                                             </div>
                                         </div>
@@ -745,7 +820,7 @@
                                 Rekap KPI Pegawai
                             </h2>
 
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
                                     <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ kpiData.length }}</div>
                                     <div class="text-sm text-blue-600 dark:text-blue-400">Total KPI</div>
@@ -761,6 +836,10 @@
                                 <div class="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 text-center">
                                     <div class="text-2xl font-bold text-red-600 dark:text-red-400">{{ overdueKPIs }}</div>
                                     <div class="text-sm text-red-600 dark:text-red-400">Terlambat</div>
+                                </div>
+                                <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
+                                    <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ recurringKPIs }}</div>
+                                    <div class="text-sm text-purple-600 dark:text-purple-400">Berulang</div>
                                 </div>
                             </div>
                         </div>
@@ -811,6 +890,10 @@
                                         <span v-if="getEmployeeKPICount(employee.username, 'overdue') > 0" 
                                               class="px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full">
                                             <i class="fas fa-exclamation-triangle mr-1"></i>{{ getEmployeeKPICount(employee.username, 'overdue') }} Terlambat
+                                        </span>
+                                        <span v-if="getEmployeeRecurringKPICount(employee.username) > 0" 
+                                              class="px-2 py-1 text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 rounded-full">
+                                            <i class="fas fa-repeat mr-1"></i>{{ getEmployeeRecurringKPICount(employee.username) }} Berulang
                                         </span>
                                     </div>
                                 </div>
@@ -979,12 +1062,14 @@
                         </div>
 
                         <div class="space-y-4">
-                            <div v-for="kpi in myKPIs" :key="kpi.id" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border-l-4"
+                            <div v-for="kpi in myKPIs" :key="kpi.id" 
+                                 class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border-l-4"
                                  :class="{
                                      'border-green-500': kpi.status === 'completed',
                                      'border-blue-500': kpi.status === 'in-progress',
                                      'border-yellow-500': kpi.status === 'pending',
-                                     'border-red-500': kpi.status === 'overdue'
+                                     'border-red-500': kpi.status === 'overdue',
+                                     'recurring-pattern': kpi.isRecurring
                                  }">
                                 <div class="flex items-start justify-between">
                                     <div class="flex-1">
@@ -999,6 +1084,9 @@
                                                   }">
                                                 {{ getKPIStatusLabel(kpi.status) }}
                                             </span>
+                                            <span v-if="kpi.isRecurring" class="px-2 py-1 text-xs font-medium rounded-full kpi-recurring">
+                                                <i class="fas fa-repeat mr-1"></i>Berulang
+                                            </span>
                                         </div>
                                         <p class="text-gray-600 dark:text-gray-400 mb-3">{{ kpi.description }}</p>
                                         <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
@@ -1009,6 +1097,10 @@
                                             <div>
                                                 <i class="fas fa-user mr-1"></i>
                                                 Dibuat: {{ formatDate(kpi.createdAt) }}
+                                            </div>
+                                            <div v-if="kpi.isRecurring">
+                                                <i class="fas fa-repeat mr-1"></i>
+                                                Setiap tanggal {{ kpi.monthlyDeadlineDay }}
                                             </div>
                                         </div>
                                     </div>
@@ -1404,11 +1496,14 @@
                     title: '',
                     description: '',
                     assignedTo: '',
-                    deadline: ''
+                    deadline: '',
+                    recurringType: 'once', // NEW: 'once' or 'monthly'
+                    monthlyDeadlineDay: 31 // NEW: day of month for recurring KPIs
                 });
 
                 const kpiFilter = reactive({
-                    employee: ''
+                    employee: '',
+                    type: '' // NEW: filter by recurring type
                 });
 
                 const attendanceForm = reactive({
@@ -1518,6 +1613,24 @@
                     return true;
                 });
 
+                // NEW: KPI Form validation
+                const isKPIFormValid = computed(() => {
+                    const form = kpiForm;
+                    if (!form.title || !form.assignedTo || !form.recurringType) {
+                        return false;
+                    }
+                    
+                    if (form.recurringType === 'once' && !form.deadline) {
+                        return false;
+                    }
+                    
+                    if (form.recurringType === 'monthly' && (!form.monthlyDeadlineDay || form.monthlyDeadlineDay < 1 || form.monthlyDeadlineDay > 31)) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
+
                 // Helper functions
                 function getJakartaDate() {
                     const now = new Date();
@@ -1574,6 +1687,50 @@
                         month: 'short',
                         hour: '2-digit',
                         minute: '2-digit'
+                    });
+                };
+
+                // NEW: Generate monthly KPIs for recurring templates
+                const generateMonthlyKPIs = () => {
+                    const currentMonth = getCurrentMonth();
+                    const [year, month] = currentMonth.split('-');
+                    const currentDay = parseInt(getCurrentDate().split('-')[2]);
+                    
+                    // Find recurring KPI templates
+                    const recurringTemplates = kpiData.value.filter(kpi => kpi.isRecurring && kpi.recurringType === 'monthly');
+                    
+                    recurringTemplates.forEach(template => {
+                        // Check if KPI for this month already exists
+                        const monthlyKPIExists = kpiData.value.some(kpi => 
+                            kpi.parentRecurringId === template.id && 
+                            kpi.deadline.startsWith(currentMonth)
+                        );
+                        
+                        // Create monthly KPI if it doesn't exist and we're past the 1st of the month
+                        if (!monthlyKPIExists && currentDay >= 1) {
+                            const monthlyDeadline = `${currentMonth}-${template.monthlyDeadlineDay.toString().padStart(2, '0')}`;
+                            
+                            // Validate the date exists in this month
+                            const deadlineDate = new Date(monthlyDeadline);
+                            if (deadlineDate.getMonth() === parseInt(month) - 1) {
+                                const newMonthlyKPI = {
+                                    id: `monthly-${template.id}-${currentMonth}`,
+                                    title: template.title,
+                                    description: template.description,
+                                    assignedTo: template.assignedTo,
+                                    deadline: monthlyDeadline,
+                                    status: 'pending',
+                                    createdAt: getCurrentDate(),
+                                    createdBy: template.createdBy,
+                                    isRecurring: false,
+                                    parentRecurringId: template.id,
+                                    monthlyDeadlineDay: template.monthlyDeadlineDay
+                                };
+                                
+                                kpiData.value.push(newMonthlyKPI);
+                                console.log('Generated monthly KPI:', newMonthlyKPI);
+                            }
+                        }
                     });
                 };
 
@@ -1734,7 +1891,7 @@
                             console.log('✅ Employees synced:', employees.value.length);
                         }
 
-                        // Sync KPI data
+                        // Sync KPI data with new recurring fields
                         const { data: kpiDataFromDB, error: kpiError } = await supabase.value
                             .from('kpi')
                             .select('*')
@@ -1747,7 +1904,11 @@
                                 ...kpi,
                                 assignedTo: kpi.assigned_to,
                                 createdAt: kpi.created_at,
-                                createdBy: kpi.created_by
+                                createdBy: kpi.created_by,
+                                isRecurring: kpi.is_recurring || false,
+                                recurringType: kpi.recurring_type || 'once',
+                                monthlyDeadlineDay: kpi.monthly_deadline_day || null,
+                                parentRecurringId: kpi.parent_recurring_id || null
                             }));
                             console.log('✅ KPI data synced:', kpiData.value.length);
                         }
@@ -1795,6 +1956,9 @@
                             console.log('✅ Daily reports synced:', reportsDataFromDB.length, 'records');
                         }
 
+                        // Generate monthly KPIs after sync
+                        generateMonthlyKPIs();
+
                         saveToStorage();
                         console.log('✅ Sync from Supabase completed successfully');
                         
@@ -1839,7 +2003,7 @@
                             console.log('✅ Employees synced to database');
                         }
 
-                        // Sync KPI data
+                        // Sync KPI data with new recurring fields
                         if (kpiData.value.length > 0) {
                             const kpiForDB = kpiData.value.map(kpi => ({
                                 id: kpi.id,
@@ -1849,7 +2013,11 @@
                                 deadline: kpi.deadline,
                                 status: kpi.status || 'pending',
                                 created_at: kpi.createdAt,
-                                created_by: kpi.createdBy
+                                created_by: kpi.createdBy,
+                                is_recurring: kpi.isRecurring || false,
+                                recurring_type: kpi.recurringType || 'once',
+                                monthly_deadline_day: kpi.monthlyDeadlineDay || null,
+                                parent_recurring_id: kpi.parentRecurringId || null
                             }));
 
                             const { error: kpiError } = await supabase.value
@@ -1959,6 +2127,9 @@
                                 document.documentElement.classList.add('dark');
                             }
                         }
+
+                        // Generate monthly KPIs after loading
+                        generateMonthlyKPIs();
                     } catch (error) {
                         console.error('Error loading from storage:', error);
                     }
@@ -2026,7 +2197,8 @@
                     
                     activeTab.value = isAdmin.value ? 'employee-management' : 'my-kpi';
                     
-                    // Sync data setelah login
+                    // Generate monthly KPIs and sync data after login
+                    generateMonthlyKPIs();
                     if (supabaseConnected.value) {
                         await syncFromSupabase();
                     }
@@ -2167,7 +2339,7 @@
                     const today = new Date(getCurrentDate());
                     
                     kpiData.value.forEach(kpi => {
-                        if (kpi.status !== 'completed') {
+                        if (kpi.status !== 'completed' && !kpi.isRecurring) {
                             const deadline = new Date(kpi.deadline);
                             if (deadline < today) {
                                 kpi.status = 'overdue';
@@ -2201,46 +2373,127 @@
                     autoSave();
                 };
 
+                // NEW: Enhanced addKPI function with recurring support
                 const addKPI = () => {
-                    if (!kpiForm.title || !kpiForm.assignedTo || !kpiForm.deadline) {
+                    if (!isKPIFormValid.value) {
                         showNotification('Lengkapi semua field yang diperlukan', 'error');
                         return;
                     }
                     
-                    const newKPI = {
-                        id: 'kpi-' + Date.now(),
-                        title: kpiForm.title,
-                        description: kpiForm.description,
-                        assignedTo: kpiForm.assignedTo,
-                        deadline: kpiForm.deadline,
-                        status: 'pending',
-                        createdAt: getCurrentDate(),
-                        createdBy: currentUser.value.username
-                    };
+                    const form = kpiForm;
                     
-                    kpiData.value.push(newKPI);
+                    if (form.recurringType === 'monthly') {
+                        // Create recurring template
+                        const recurringTemplate = {
+                            id: 'recurring-' + Date.now(),
+                            title: form.title,
+                            description: form.description,
+                            assignedTo: form.assignedTo,
+                            deadline: null, // Templates don't have specific deadlines
+                            status: 'template', // Special status for templates
+                            createdAt: getCurrentDate(),
+                            createdBy: currentUser.value.username,
+                            isRecurring: true,
+                            recurringType: 'monthly',
+                            monthlyDeadlineDay: parseInt(form.monthlyDeadlineDay)
+                        };
+                        
+                        kpiData.value.push(recurringTemplate);
+                        
+                        // Generate this month's KPI immediately
+                        const currentMonth = getCurrentMonth();
+                        const monthlyDeadline = `${currentMonth}-${form.monthlyDeadlineDay.toString().padStart(2, '0')}`;
+                        
+                        // Validate the date exists in this month
+                        const deadlineDate = new Date(monthlyDeadline);
+                        if (deadlineDate.getMonth() === parseInt(currentMonth.split('-')[1]) - 1) {
+                            const currentMonthKPI = {
+                                id: `monthly-${recurringTemplate.id}-${currentMonth}`,
+                                title: form.title,
+                                description: form.description,
+                                assignedTo: form.assignedTo,
+                                deadline: monthlyDeadline,
+                                status: 'pending',
+                                createdAt: getCurrentDate(),
+                                createdBy: currentUser.value.username,
+                                isRecurring: false,
+                                parentRecurringId: recurringTemplate.id,
+                                monthlyDeadlineDay: parseInt(form.monthlyDeadlineDay)
+                            };
+                            
+                            kpiData.value.push(currentMonthKPI);
+                        }
+                        
+                        showNotification('KPI berulang berhasil ditambahkan dan akan otomatis dibuat setiap bulan', 'success');
+                    } else {
+                        // Create one-time KPI
+                        const newKPI = {
+                            id: 'kpi-' + Date.now(),
+                            title: form.title,
+                            description: form.description,
+                            assignedTo: form.assignedTo,
+                            deadline: form.deadline,
+                            status: 'pending',
+                            createdAt: getCurrentDate(),
+                            createdBy: currentUser.value.username,
+                            isRecurring: false,
+                            recurringType: 'once'
+                        };
+                        
+                        kpiData.value.push(newKPI);
+                        showNotification('KPI baru berhasil ditambahkan', 'success');
+                    }
+                    
                     resetKPIForm();
                     autoSave();
-                    showNotification('KPI baru berhasil ditambahkan', 'success');
                 };
 
                 const editKPI = (kpi) => {
                     const newTitle = prompt('Edit judul KPI:', kpi.title);
                     if (newTitle && newTitle.trim()) {
                         kpi.title = newTitle.trim();
+                        
+                        // If editing a recurring template, update all its monthly instances
+                        if (kpi.isRecurring) {
+                            const monthlyInstances = kpiData.value.filter(k => k.parentRecurringId === kpi.id);
+                            monthlyInstances.forEach(instance => {
+                                instance.title = newTitle.trim();
+                            });
+                        }
+                        
                         autoSave();
                         showNotification('KPI berhasil diupdate', 'success');
                     }
                 };
 
                 const deleteKPI = (kpiId) => {
-                    if (confirm('Apakah Anda yakin ingin menghapus KPI ini?')) {
-                        const index = kpiData.value.findIndex(kpi => kpi.id === kpiId);
-                        if (index !== -1) {
-                            kpiData.value.splice(index, 1);
-                            autoSave();
-                            showNotification('KPI berhasil dihapus', 'success');
+                    const kpi = kpiData.value.find(k => k.id === kpiId);
+                    if (!kpi) return;
+                    
+                    let confirmMessage = 'Apakah Anda yakin ingin menghapus KPI ini?';
+                    
+                    if (kpi.isRecurring) {
+                        const monthlyCount = kpiData.value.filter(k => k.parentRecurringId === kpiId).length;
+                        confirmMessage = `Ini adalah KPI berulang dengan ${monthlyCount} instance bulanan. Apakah Anda yakin ingin menghapus semua KPI ini?`;
+                    }
+                    
+                    if (confirm(confirmMessage)) {
+                        if (kpi.isRecurring) {
+                            // Delete the recurring template and all its monthly instances
+                            kpiData.value = kpiData.value.filter(k => 
+                                k.id !== kpiId && k.parentRecurringId !== kpiId
+                            );
+                            showNotification('KPI berulang dan semua instance bulanannya berhasil dihapus', 'success');
+                        } else {
+                            // Delete single KPI
+                            const index = kpiData.value.findIndex(k => k.id === kpiId);
+                            if (index !== -1) {
+                                kpiData.value.splice(index, 1);
+                                showNotification('KPI berhasil dihapus', 'success');
+                            }
                         }
+                        
+                        autoSave();
                     }
                 };
 
@@ -2249,7 +2502,9 @@
                         title: '',
                         description: '',
                         assignedTo: '',
-                        deadline: ''
+                        deadline: '',
+                        recurringType: 'once',
+                        monthlyDeadlineDay: 31
                     });
                 };
 
@@ -2444,11 +2699,24 @@
                     kpiData.value.filter(kpi => kpi.status === 'overdue').length
                 );
 
+                // NEW: Recurring KPIs count
+                const recurringKPIs = computed(() => 
+                    kpiData.value.filter(kpi => kpi.isRecurring && kpi.status === 'template').length
+                );
+
                 const filteredKPIData = computed(() => {
-                    let filtered = kpiData.value;
+                    let filtered = kpiData.value.filter(kpi => kpi.status !== 'template'); // Hide templates from main list
                     
                     if (kpiFilter.employee) {
                         filtered = filtered.filter(kpi => kpi.assignedTo === kpiFilter.employee);
+                    }
+                    
+                    if (kpiFilter.type) {
+                        if (kpiFilter.type === 'monthly') {
+                            filtered = filtered.filter(kpi => kpi.parentRecurringId || kpi.isRecurring);
+                        } else {
+                            filtered = filtered.filter(kpi => !kpi.parentRecurringId && !kpi.isRecurring);
+                        }
                     }
                     
                     return filtered;
@@ -2481,15 +2749,26 @@
                 });
 
                 const getEmployeeKPICount = (username, status = null) => {
-                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
+                    const employeeKPIs = kpiData.value.filter(kpi => 
+                        kpi.assignedTo === username && kpi.status !== 'template'
+                    );
                     if (status) {
                         return employeeKPIs.filter(kpi => kpi.status === status).length;
                     }
                     return employeeKPIs.length;
                 };
 
+                // NEW: Get recurring KPI count for employee
+                const getEmployeeRecurringKPICount = (username) => {
+                    return kpiData.value.filter(kpi => 
+                        kpi.assignedTo === username && kpi.parentRecurringId
+                    ).length;
+                };
+
                 const getEmployeeKPIProgress = (username) => {
-                    const employeeKPIs = kpiData.value.filter(kpi => kpi.assignedTo === username);
+                    const employeeKPIs = kpiData.value.filter(kpi => 
+                        kpi.assignedTo === username && kpi.status !== 'template'
+                    );
                     if (employeeKPIs.length === 0) return 0;
                     const completed = employeeKPIs.filter(kpi => kpi.status === 'completed').length;
                     return Math.round((completed / employeeKPIs.length) * 100);
@@ -2647,12 +2926,20 @@
                         }
                     }, 30000);
                     
-                    // Periodic sync
+                    // Periodic sync and monthly KPI generation
                     setInterval(async () => {
                         if (supabaseConnected.value && !isSyncing.value && isLoggedIn.value) {
+                            generateMonthlyKPIs();
                             await syncFromSupabase();
                         }
                     }, 300000); // 5 minutes
+                    
+                    // Daily check for monthly KPI generation
+                    setInterval(() => {
+                        if (isLoggedIn.value) {
+                            generateMonthlyKPIs();
+                        }
+                    }, 3600000); // 1 hour
                     
                     setTimeout(() => {
                         loading.value = false;
@@ -2723,6 +3010,7 @@
                     completedKPIs,
                     inProgressKPIs,
                     overdueKPIs,
+                    recurringKPIs,
                     myKPIs,
                     filteredKPIData,
                     kpiProgress,
@@ -2734,6 +3022,7 @@
                     todayOfficeStats,
                     needsDescription,
                     isEmployeeFormValid,
+                    isKPIFormValid,
                     filteredDailyReports,
                     filteredAttendanceRecords,
                     monthlyAttendanceStats,
@@ -2758,6 +3047,7 @@
                     toggleEmployeeStatus,
                     getEmployeeName,
                     getEmployeeKPICount,
+                    getEmployeeRecurringKPICount,
                     getEmployeeKPIProgress,
                     getEmployeeMonthlyAttendance,
                     getEmployeeAttendancePercentage,
@@ -2779,7 +3069,8 @@
                     resetForms,
                     testSync,
                     syncToSupabase,
-                    syncFromSupabase
+                    syncFromSupabase,
+                    generateMonthlyKPIs
                 };
             }
         });
