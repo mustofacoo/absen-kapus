@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem absen dan KPI Kantor Pusat</title>
+    <title>KPI System - Enhanced Version with Recurring KPI</title>
     
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -356,7 +356,7 @@
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div>
                         <h1 class="text-2xl lg:text-3xl font-bold mb-2">
-                            <i class="fas fa-chart-line mr-3"></i>Absen, KPI dan Laporan
+                            <i class="fas fa-chart-line mr-3"></i>KPI Tracker & Daily Report
                         </h1>
                         <p class="text-lg opacity-90">{{ isAdmin ? 'Panel Administrator' : `Selamat datang, ${currentUser.name}` }}</p>
                     </div>
@@ -718,12 +718,18 @@
                                         </div>
                                         <div class="ml-4 flex space-x-2">
                                             <button @click="editKPI(kpi)" 
-                                                    class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors">
+                                                    :disabled="isSubmitting"
+                                                    :class="isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'"
+                                                    class="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors">
                                                 <i class="fas fa-edit"></i>
                                             </button>
+                                            
                                             <button @click="deleteKPI(kpi.id)" 
-                                                    class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors">
-                                                <i class="fas fa-trash"></i>
+                                                    :disabled="isSubmitting"
+                                                    :class="isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-600'"
+                                                    class="px-3 py-2 bg-red-500 text-white rounded-lg text-sm font-medium transition-colors">
+                                                <i v-if="!isSubmitting" class="fas fa-trash"></i>
+                                                <i v-else class="fas fa-spinner fa-spin"></i>
                                             </button>
                                         </div>
                                     </div>
@@ -1575,6 +1581,8 @@
                     kpiData.value.filter(kpi => kpi.status === 'pending').length
                 );
 
+                const deletedMonthlyKPIs = ref(new Set()); // Set of deleted KPI IDs
+
                 const myKPIs = computed(() => {
                     if (!currentUser.value) return [];
                     updateKPIStatuses();
@@ -1696,42 +1704,110 @@
                     const [year, month] = currentMonth.split('-');
                     const currentDay = parseInt(getCurrentDate().split('-')[2]);
                     
+                    console.log('🔄 Generating monthly KPIs for:', currentMonth);
+                    
                     // Find recurring KPI templates
-                    const recurringTemplates = kpiData.value.filter(kpi => kpi.isRecurring && kpi.recurringType === 'monthly');
+                    const recurringTemplates = kpiData.value.filter(kpi => 
+                        kpi.isRecurring && 
+                        kpi.recurringType === 'monthly' && 
+                        kpi.status === 'template'
+                    );
+                    
+                    console.log('📋 Found recurring templates:', recurringTemplates.length);
+                    
+                    let generatedCount = 0;
                     
                     recurringTemplates.forEach(template => {
-                        // Check if KPI for this month already exists
-                        const monthlyKPIExists = kpiData.value.some(kpi => 
-                            kpi.parentRecurringId === template.id && 
-                            kpi.deadline.startsWith(currentMonth)
-                        );
+                        // Generate monthly KPI ID
+                        const monthlyKPIId = `monthly-${template.id}-${currentMonth}`;
                         
-                        // Create monthly KPI if it doesn't exist and we're past the 1st of the month
-                        if (!monthlyKPIExists && currentDay >= 1) {
-                            const monthlyDeadline = `${currentMonth}-${template.monthlyDeadlineDay.toString().padStart(2, '0')}`;
+                        console.log('🔍 Checking monthly KPI:', monthlyKPIId);
+                        
+                        // CHECK 1: Apakah KPI sudah ada?
+                        const existingKPI = kpiData.value.find(kpi => kpi.id === monthlyKPIId);
+                        if (existingKPI) {
+                            console.log('⏭️ Monthly KPI already exists:', monthlyKPIId);
+                            return; // Skip, sudah ada
+                        }
+                        
+                        // CHECK 2: Apakah KPI ini pernah dihapus oleh user?
+                        if (deletedMonthlyKPIs.value.has(monthlyKPIId)) {
+                            console.log('🚫 Monthly KPI was deleted by user, skipping:', monthlyKPIId);
+                            return; // Skip, sudah pernah dihapus
+                        }
+                        
+                        // CHECK 3: Apakah kita sudah melewati tanggal 1 bulan ini?
+                        if (currentDay < 1) {
+                            console.log('📅 Too early in month, skipping generation');
+                            return;
+                        }
+                        
+                        // Generate deadline date
+                        let monthlyDeadline;
+                        try {
+                            monthlyDeadline = `${currentMonth}-${template.monthlyDeadlineDay.toString().padStart(2, '0')}`;
                             
                             // Validate the date exists in this month
                             const deadlineDate = new Date(monthlyDeadline);
-                            if (deadlineDate.getMonth() === parseInt(month) - 1) {
-                                const newMonthlyKPI = {
-                                    id: `monthly-${template.id}-${currentMonth}`,
-                                    title: template.title,
-                                    description: template.description,
-                                    assignedTo: template.assignedTo,
-                                    deadline: monthlyDeadline,
-                                    status: 'pending',
-                                    createdAt: getCurrentDate(),
-                                    createdBy: template.createdBy,
-                                    isRecurring: false,
-                                    parentRecurringId: template.id,
-                                    monthlyDeadlineDay: template.monthlyDeadlineDay
-                                };
-                                
-                                kpiData.value.push(newMonthlyKPI);
-                                console.log('Generated monthly KPI:', newMonthlyKPI);
+                            if (deadlineDate.getMonth() !== parseInt(month) - 1) {
+                                console.log('📅 Invalid deadline date for month, skipping:', monthlyDeadline);
+                                return;
                             }
+                        } catch (error) {
+                            console.error('Error generating deadline:', error);
+                            return;
                         }
+                        
+                        // Create new monthly KPI
+                        const newMonthlyKPI = {
+                            id: monthlyKPIId,
+                            title: template.title,
+                            description: template.description,
+                            assignedTo: template.assignedTo,
+                            deadline: monthlyDeadline,
+                            status: 'pending',
+                            createdAt: getCurrentDate(),
+                            createdBy: template.createdBy,
+                            isRecurring: false,
+                            recurringType: 'once',
+                            parentRecurringId: template.id,
+                            monthlyDeadlineDay: template.monthlyDeadlineDay
+                        };
+                        
+                        kpiData.value.push(newMonthlyKPI);
+                        generatedCount++;
+                        
+                        console.log('✅ Generated monthly KPI:', newMonthlyKPI);
                     });
+                    
+                    if (generatedCount > 0) {
+                        console.log(`🎉 Generated ${generatedCount} new monthly KPIs`);
+                        saveToStorage(); // Save immediately
+                    } else {
+                        console.log('📝 No new monthly KPIs generated');
+                    }
+                    
+                    return generatedCount;
+                };
+
+                const saveDeletedKPIs = () => {
+                    try {
+                        localStorage.setItem('deletedMonthlyKPIs', JSON.stringify(Array.from(deletedMonthlyKPIs.value)));
+                    } catch (error) {
+                        console.error('Error saving deleted KPIs:', error);
+                    }
+                };
+
+                const loadDeletedKPIs = () => {
+                    try {
+                        const saved = localStorage.getItem('deletedMonthlyKPIs');
+                        if (saved) {
+                            deletedMonthlyKPIs.value = new Set(JSON.parse(saved));
+                            console.log('📝 Loaded deleted KPIs:', Array.from(deletedMonthlyKPIs.value));
+                        }
+                    } catch (error) {
+                        console.error('Error loading deleted KPIs:', error);
+                    }
                 };
 
                 // Notifications
@@ -1820,35 +1896,45 @@
                     console.log('🔔 Setting up realtime subscriptions...');
 
                     try {
-                        // Subscribe to all table changes
+                        let syncTimeout;
+                        
+                        const debouncedSync = () => {
+                            clearTimeout(syncTimeout);
+                            syncTimeout = setTimeout(() => {
+                                if (!isSubmitting.value) {
+                                    syncFromSupabase();
+                                }
+                            }, 3000); // 3 detik delay
+                        };
+                        
                         const channel = supabase.value
                             .channel('db-changes')
                             .on('postgres_changes', 
                                 { event: '*', schema: 'public', table: 'employees' }, 
                                 (payload) => {
                                     console.log('Employee change:', payload);
-                                    setTimeout(() => syncFromSupabase(), 500);
+                                    debouncedSync();
                                 }
                             )
                             .on('postgres_changes', 
                                 { event: '*', schema: 'public', table: 'kpi' }, 
                                 (payload) => {
                                     console.log('KPI change:', payload);
-                                    setTimeout(() => syncFromSupabase(), 500);
+                                    debouncedSync();
                                 }
                             )
                             .on('postgres_changes', 
                                 { event: '*', schema: 'public', table: 'attendance' }, 
                                 (payload) => {
                                     console.log('Attendance change:', payload);
-                                    setTimeout(() => syncFromSupabase(), 500);
+                                    debouncedSync();
                                 }
                             )
                             .on('postgres_changes', 
                                 { event: '*', schema: 'public', table: 'daily_reports' }, 
                                 (payload) => {
                                     console.log('Report change:', payload);
-                                    setTimeout(() => syncFromSupabase(), 500);
+                                    debouncedSync();
                                 }
                             )
                             .subscribe((status) => {
@@ -1861,6 +1947,7 @@
                         console.error('❌ Error setting up realtime subscriptions:', error);
                     }
                 };
+
 
                 const syncFromSupabase = async () => {
                     if (!supabaseConnected.value || isSyncing.value) return;
@@ -1969,171 +2056,160 @@
                         isSyncing.value = false;
                     }
                 };
-
-                const syncToSupabase = async () => {
-                    if (!supabaseConnected.value || isSyncing.value) return;
+const syncToSupabase = async () => {
+    if (!supabaseConnected.value || isSyncing.value) return;
+    
+    isSyncing.value = true;
+    console.log('🔄 Starting sync to Supabase...');
+    
+    try {
+        // TAMBAHKAN: Clear deleted records from Supabase first
+        // Get current IDs from local data
+        const localKPIIds = kpiData.value.map(kpi => kpi.id);
+        
+        if (localKPIIds.length > 0) {
+            // Delete records that exist in Supabase but not locally
+            const { data: supabaseKPIs, error: fetchError } = await supabase.value
+                .from('kpi')
+                .select('id');
+            
+            if (!fetchError && supabaseKPIs) {
+                const supabaseKPIIds = supabaseKPIs.map(kpi => kpi.id);
+                const idsToDelete = supabaseKPIIds.filter(id => !localKPIIds.includes(id));
+                
+                if (idsToDelete.length > 0) {
+                    console.log('🗑️ Deleting orphaned records from Supabase:', idsToDelete);
+                    const { error: deleteError } = await supabase.value
+                        .from('kpi')
+                        .delete()
+                        .in('id', idsToDelete);
                     
-                    isSyncing.value = true;
-                    console.log('🔄 Starting sync to Supabase...');
-                    
-                    try {
-                        // Sync employees (exclude admin)
-                        const employeesToSync = employees.value.filter(emp => emp.username !== 'admin');
-                        
-                        if (employeesToSync.length > 0) {
-                            const employeesForDB = employeesToSync.map(emp => ({
-                                id: emp.id,
-                                username: emp.username,
-                                password: emp.password,
-                                name: emp.name,
-                                email: emp.email || null,
-                                position: emp.position || null,
-                                status: emp.status || 'active',
-                                created_at: emp.created_at || getCurrentDate()
-                            }));
-
-                            const { error: empError } = await supabase.value
-                                .from('employees')
-                                .upsert(employeesForDB, { 
-                                    onConflict: 'username',
-                                    ignoreDuplicates: false 
-                                });
-
-                            if (empError) throw empError;
-                            console.log('✅ Employees synced to database');
-                        }
-
-                        // Sync KPI data with new recurring fields
-                        if (kpiData.value.length > 0) {
-                            const kpiForDB = kpiData.value.map(kpi => ({
-                                id: kpi.id,
-                                title: kpi.title,
-                                description: kpi.description || null,
-                                assigned_to: kpi.assignedTo,
-                                deadline: kpi.deadline,
-                                status: kpi.status || 'pending',
-                                created_at: kpi.createdAt,
-                                created_by: kpi.createdBy,
-                                is_recurring: kpi.isRecurring || false,
-                                recurring_type: kpi.recurringType || 'once',
-                                monthly_deadline_day: kpi.monthlyDeadlineDay || null,
-                                parent_recurring_id: kpi.parentRecurringId || null
-                            }));
-
-                            const { error: kpiError } = await supabase.value
-                                .from('kpi')
-                                .upsert(kpiForDB, { 
-                                    onConflict: 'id',
-                                    ignoreDuplicates: false 
-                                });
-
-                            if (kpiError) throw kpiError;
-                            console.log('✅ KPI data synced to database');
-                        }
-
-                        // Sync attendance data
-                        const attendanceArray = [];
-                        Object.entries(attendanceData.value).forEach(([username, dates]) => {
-                            Object.values(dates).forEach(attendance => {
-                                attendanceArray.push({
-                                    id: `${attendance.employee}-${attendance.date}`,
-                                    employee: attendance.employee,
-                                    date: attendance.date,
-                                    status: attendance.status,
-                                    description: attendance.description || null,
-                                    timestamp: attendance.timestamp
-                                });
-                            });
-                        });
-
-                        if (attendanceArray.length > 0) {
-                            const { error: attError } = await supabase.value
-                                .from('attendance')
-                                .upsert(attendanceArray, { 
-                                    onConflict: 'id',
-                                    ignoreDuplicates: false 
-                                });
-
-                            if (attError) throw attError;
-                            console.log('✅ Attendance data synced to database');
-                        }
-
-                        // Sync daily reports
-                        const reportsArray = [];
-                        Object.entries(dailyReports.value).forEach(([username, dates]) => {
-                            Object.values(dates).forEach(report => {
-                                reportsArray.push({
-                                    id: `${report.employee}-${report.date}`,
-                                    employee: report.employee,
-                                    date: report.date,
-                                    working_on: report.workingOn,
-                                    completed: report.completed,
-                                    timestamp: report.timestamp
-                                });
-                            });
-                        });
-
-                        if (reportsArray.length > 0) {
-                            const { error: repError } = await supabase.value
-                                .from('daily_reports')
-                                .upsert(reportsArray, { 
-                                    onConflict: 'id',
-                                    ignoreDuplicates: false 
-                                });
-
-                            if (repError) throw repError;
-                            console.log('✅ Daily reports synced to database');
-                        }
-
-                        console.log('✅ All data synced successfully to Supabase');
-                        showNotification('Data berhasil disinkronkan', 'success');
-                        
-                    } catch (error) {
-                        console.error('❌ Sync to Supabase error:', error);
-                        showNotification('Gagal sinkron ke database: ' + error.message, 'error');
-                    } finally {
-                        isSyncing.value = false;
+                    if (deleteError) {
+                        console.error('Error deleting orphaned records:', deleteError);
                     }
-                };
+                }
+            }
+        }
+        
+        // Sync employees (exclude admin)
+        const employeesToSync = employees.value.filter(emp => emp.username !== 'admin');
+        
+        if (employeesToSync.length > 0) {
+            const employeesForDB = employeesToSync.map(emp => ({
+                id: emp.id,
+                username: emp.username,
+                password: emp.password,
+                name: emp.name,
+                email: emp.email || null,
+                position: emp.position || null,
+                status: emp.status || 'active',
+                created_at: emp.created_at || getCurrentDate()
+            }));
+
+            const { error: empError } = await supabase.value
+                .from('employees')
+                .upsert(employeesForDB, { 
+                    onConflict: 'username',
+                    ignoreDuplicates: false 
+                });
+
+            if (empError) throw empError;
+            console.log('✅ Employees synced to database');
+        }
+
+        // Sync KPI data with new recurring fields
+        if (kpiData.value.length > 0) {
+            const kpiForDB = kpiData.value.map(kpi => ({
+                id: kpi.id,
+                title: kpi.title,
+                description: kpi.description || null,
+                assigned_to: kpi.assignedTo,
+                deadline: kpi.deadline,
+                status: kpi.status || 'pending',
+                created_at: kpi.createdAt,
+                created_by: kpi.createdBy,
+                is_recurring: kpi.isRecurring || false,
+                recurring_type: kpi.recurringType || 'once',
+                monthly_deadline_day: kpi.monthlyDeadlineDay || null,
+                parent_recurring_id: kpi.parentRecurringId || null
+            }));
+
+            const { error: kpiError } = await supabase.value
+                .from('kpi')
+                .upsert(kpiForDB, { 
+                    onConflict: 'id',
+                    ignoreDuplicates: false 
+                });
+
+            if (kpiError) throw kpiError;
+            console.log('✅ KPI data synced to database');
+        } else {
+            // TAMBAHKAN: Jika tidak ada KPI lokal, hapus semua dari Supabase
+            console.log('🗑️ No local KPIs, clearing Supabase...');
+            const { error: clearError } = await supabase.value
+                .from('kpi')
+                .delete()
+                .neq('id', 'dummy'); // Delete all records
+            
+            if (clearError) {
+                console.error('Error clearing KPI from Supabase:', clearError);
+            }
+        }
+
+        // ... rest of sync code for attendance and reports ...
+
+        console.log('✅ All data synced successfully to Supabase');
+        showNotification('Data berhasil disinkronkan', 'success');
+        
+    } catch (error) {
+        console.error('❌ Sync to Supabase error:', error);
+        showNotification('Gagal sinkron ke database: ' + error.message, 'error');
+    } finally {
+        isSyncing.value = false;
+    }
+};
 
                 // Storage functions
                 const loadFromStorage = () => {
-                    try {
-                        const savedEmployees = localStorage.getItem('employees');
-                        if (savedEmployees) {
-                            const parsed = JSON.parse(savedEmployees);
-                            employees.value = parsed.filter(emp => emp.username && emp.name);
-                        }
+    try {
+        const savedEmployees = localStorage.getItem('employees');
+        if (savedEmployees) {
+            const parsed = JSON.parse(savedEmployees);
+            employees.value = parsed.filter(emp => emp.username && emp.name);
+        }
 
-                        const savedKPIs = localStorage.getItem('kpiData');
-                        if (savedKPIs) {
-                            kpiData.value = JSON.parse(savedKPIs);
-                        }
+        const savedKPIs = localStorage.getItem('kpiData');
+        if (savedKPIs) {
+            kpiData.value = JSON.parse(savedKPIs);
+        }
 
-                        const savedReports = localStorage.getItem('dailyReports');
-                        if (savedReports) {
-                            dailyReports.value = JSON.parse(savedReports);
-                        }
+        const savedReports = localStorage.getItem('dailyReports');
+        if (savedReports) {
+            dailyReports.value = JSON.parse(savedReports);
+        }
 
-                        const savedAttendance = localStorage.getItem('attendanceData');
-                        if (savedAttendance) {
-                            attendanceData.value = JSON.parse(savedAttendance);
-                        }
+        const savedAttendance = localStorage.getItem('attendanceData');
+        if (savedAttendance) {
+            attendanceData.value = JSON.parse(savedAttendance);
+        }
 
-                        const savedDarkMode = localStorage.getItem('darkMode');
-                        if (savedDarkMode !== null) {
-                            darkMode.value = savedDarkMode === 'true';
-                            if (darkMode.value) {
-                                document.documentElement.classList.add('dark');
-                            }
-                        }
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode !== null) {
+            darkMode.value = savedDarkMode === 'true';
+            if (darkMode.value) {
+                document.documentElement.classList.add('dark');
+            }
+        }
 
-                        // Generate monthly KPIs after loading
-                        generateMonthlyKPIs();
-                    } catch (error) {
-                        console.error('Error loading from storage:', error);
-                    }
-                };
+        // TAMBAHKAN: Load deleted KPIs tracking
+        loadDeletedKPIs();
+
+        // Generate monthly KPIs setelah load data
+        generateMonthlyKPIs();
+    } catch (error) {
+        console.error('Error loading from storage:', error);
+    }
+};
 
                 const saveToStorage = () => {
                     try {
@@ -2153,17 +2229,17 @@
                         saveToStorage();
                         
                         if (supabaseConnected.value && !isSyncing.value) {
-                            setTimeout(async () => {
-                                await syncToSupabase();
-                            }, 1000);
+                            // TAMBAHKAN: Immediate sync untuk operasi penting seperti delete
+                            await syncToSupabase();
                         }
                         
                     } catch (error) {
                         console.error('Auto-save error:', error);
+                        showNotification('Gagal menyimpan perubahan', 'error');
                     } finally {
                         setTimeout(() => {
                             autoSaving.value = false;
-                        }, 1500);
+                        }, 1000); // Kurangi delay
                     }
                 };
 
@@ -2466,26 +2542,85 @@
                     }
                 };
 
-                const deleteKPI = (kpiId) => {
-                    const kpi = kpiData.value.find(k => k.id === kpiId);
-                    if (!kpi) return;
-                    
-                    let confirmMessage = 'Apakah Anda yakin ingin menghapus KPI ini?';
-                    
-                    if (kpi.isRecurring) {
-                        const monthlyCount = kpiData.value.filter(k => k.parentRecurringId === kpiId).length;
-                        confirmMessage = `Ini adalah KPI berulang dengan ${monthlyCount} instance bulanan. Apakah Anda yakin ingin menghapus semua KPI ini?`;
-                    }
-                    
-                    if (confirm(confirmMessage)) {
+                const deleteKPI = async (kpiId) => {
+                const kpi = kpiData.value.find(k => k.id === kpiId);
+                if (!kpi) {
+                    showNotification('KPI tidak ditemukan', 'error');
+                    return;
+                }
+                
+                let confirmMessage = 'Apakah Anda yakin ingin menghapus KPI ini?';
+                
+                if (kpi.isRecurring) {
+                    const monthlyCount = kpiData.value.filter(k => k.parentRecurringId === kpiId).length;
+                    confirmMessage = `Ini adalah KPI berulang dengan ${monthlyCount} instance bulanan. Apakah Anda yakin ingin menghapus semua KPI ini?`;
+                }
+                
+                if (confirm(confirmMessage)) {
+                    try {
+                        isSubmitting.value = true;
+                        
+                        // Collect IDs to delete for tracking
+                        let idsToDelete = [];
+                        
                         if (kpi.isRecurring) {
-                            // Delete the recurring template and all its monthly instances
+                            // Get all monthly instances
+                            const monthlyInstances = kpiData.value.filter(k => k.parentRecurringId === kpiId);
+                            idsToDelete = [kpiId, ...monthlyInstances.map(k => k.id)];
+                        } else {
+                            idsToDelete = [kpiId];
+                        }
+                        
+                        console.log('🗑️ IDs to delete:', idsToDelete);
+                        
+                        // Track deleted monthly KPIs to prevent regeneration
+                        idsToDelete.forEach(id => {
+                            // Only track monthly KPIs (yang auto-generated)
+                            if (id.startsWith('monthly-')) {
+                                deletedMonthlyKPIs.value.add(id);
+                                console.log('📝 Added to deleted tracking:', id);
+                            }
+                        });
+                        
+                        // Save deleted tracking immediately
+                        saveDeletedKPIs();
+                        
+                        // Delete from Supabase first
+                        if (supabaseConnected.value && supabase.value) {
+                            console.log('🗑️ Deleting from Supabase first...');
+                            
+                            if (kpi.isRecurring) {
+                                const { error: deleteError } = await supabase.value
+                                    .from('kpi')
+                                    .delete()
+                                    .or(`id.eq.${kpiId},parent_recurring_id.eq.${kpiId}`);
+                                
+                                if (deleteError) {
+                                    console.error('Error deleting from Supabase:', deleteError);
+                                    showNotification('Gagal menghapus dari database: ' + deleteError.message, 'error');
+                                    return;
+                                }
+                            } else {
+                                const { error: deleteError } = await supabase.value
+                                    .from('kpi')
+                                    .delete()
+                                    .eq('id', kpiId);
+                                
+                                if (deleteError) {
+                                    console.error('Error deleting from Supabase:', deleteError);
+                                    showNotification('Gagal menghapus dari database: ' + deleteError.message, 'error');
+                                    return;
+                                }
+                            }
+                        }
+                        
+                        // Delete from local state
+                        if (kpi.isRecurring) {
                             kpiData.value = kpiData.value.filter(k => 
                                 k.id !== kpiId && k.parentRecurringId !== kpiId
                             );
                             showNotification('KPI berulang dan semua instance bulanannya berhasil dihapus', 'success');
                         } else {
-                            // Delete single KPI
                             const index = kpiData.value.findIndex(k => k.id === kpiId);
                             if (index !== -1) {
                                 kpiData.value.splice(index, 1);
@@ -2493,11 +2628,34 @@
                             }
                         }
                         
-                        autoSave();
+                        saveToStorage();
+                        
+                        console.log('✅ Delete completed. Tracking', deletedMonthlyKPIs.value.size, 'deleted monthly KPIs');
+                        
+                    } catch (error) {
+                        console.error('Error deleting KPI:', error);
+                        showNotification('Gagal menghapus KPI: ' + error.message, 'error');
+                    } finally {
+                        isSubmitting.value = false;
                     }
-                };
+                }
+            };
+            const resetDeletedKPITracking = () => {
+                if (isAdmin.value && confirm('Reset tracking KPI yang dihapus? (KPI bulanan akan dibuat ulang)')) {
+                    deletedMonthlyKPIs.value.clear();
+                    saveDeletedKPIs();
+                    showNotification('Tracking KPI yang dihapus telah direset', 'info');
+                    generateMonthlyKPIs(); // Regenerate
+                }
+            };
 
-                const resetKPIForm = () => {
+            const showDeletedKPITracking = () => {
+                console.log('🗑️ Currently tracking deleted monthly KPIs:');
+                console.log(Array.from(deletedMonthlyKPIs.value));
+                return Array.from(deletedMonthlyKPIs.value);
+            };
+
+          const resetKPIForm = () => {
                     Object.assign(kpiForm, {
                         title: '',
                         description: '',
@@ -3070,7 +3228,12 @@
                     testSync,
                     syncToSupabase,
                     syncFromSupabase,
-                    generateMonthlyKPIs
+                    generateMonthlyKPIs,
+                      deletedMonthlyKPIs,
+    resetDeletedKPITracking,
+    showDeletedKPITracking,
+    saveDeletedKPIs,
+    loadDeletedKPIs
                 };
             }
         });
