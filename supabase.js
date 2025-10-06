@@ -177,18 +177,42 @@ function attendanceApp() {
             const monthStart = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
             const monthEnd = new Date(thisMonth.getFullYear(), thisMonth.getMonth() + 1, 0);
             
+            const jakartaToday = new Date(thisMonth.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const endDate = jakartaToday < monthEnd ? jakartaToday : monthEnd;
+            
             const monthlyRecords = this.attendanceRecords.filter(record => {
-                const recordDate = new Date(record.date);
+                const recordDate = new Date(record.date + 'T00:00:00');
                 return record.employeeId === this.currentUser.id &&
                        recordDate >= monthStart && recordDate <= monthEnd;
             });
+            
+            // Hitung alfa untuk employee ini
+            let absentCount = 0;
+            for (let d = new Date(monthStart); d <= endDate; d.setDate(d.getDate() + 1)) {
+                const dayOfWeek = d.getDay();
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                
+                const hasRecord = this.attendanceRecords.some(record => 
+                    record.employeeId === this.currentUser.id && 
+                    record.date === dateStr
+                );
+                
+                if (!hasRecord) {
+                    absentCount++;
+                }
+            }
             
             this.monthlyStats = {
                 present: monthlyRecords.filter(r => r.status === 'present' || r.status === 'wfe').length,
                 late: monthlyRecords.filter(r => r.status === 'late').length,
                 sick: monthlyRecords.filter(r => r.status === 'sick').length,
                 leave: monthlyRecords.filter(r => r.status === 'leave').length,
-                absent: monthlyRecords.filter(r => r.status === 'absent').length // ✅ TAMBAH
+                absent: absentCount // Gunakan perhitungan otomatis
             };
             
             const thirtyDaysAgo = new Date();
