@@ -315,36 +315,20 @@ function attendanceApp() {
             const now = new Date();
             const options = { timeZone: 'Asia/Jakarta' };
             
-            // ✅ PERBAIKAN: Cara pembuatan tanggal yang lebih aman untuk semua gadget (Format YYYY-MM-DD)
-            const jakartaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); 
-            // en-CA otomatis menghasilkan format YYYY-MM-DD
+            const year = now.toLocaleString('en-US', { year: 'numeric', timeZone: 'Asia/Jakarta' });
+            const month = now.toLocaleString('en-US', { month: '2-digit', timeZone: 'Asia/Jakarta' });
+            const day = now.toLocaleString('en-US', { day: '2-digit', timeZone: 'Asia/Jakarta' });
+            const jakartaDate = `${year}-${month}-${day}`;
+
+            const attendance = {
+                employee_id: this.currentUser.id,
+                date: jakartaDate,
+                time: now.toLocaleTimeString('id-ID', options),
+                status: status,
+                reason: ''
+            };
 
             try {
-                // ✅ TAMBAHAN 1: Cek dulu ke database apakah user ini sudah absen hari ini?
-                const { data: existingRecord, error: checkError } = await supabaseClient
-                    .from('attendance_records')
-                    .select('id')
-                    .eq('employee_id', this.currentUser.id)
-                    .eq('date', jakartaDateStr)
-                    .maybeSingle(); // Gunakan maybeSingle agar tidak error jika kosong
-
-                // Jika sudah ada data, stop proses dan beri tahu user
-                if (existingRecord) {
-                    alert('Anda tercatat sudah melakukan absensi hari ini.');
-                    this.updateAttendanceData(); // Refresh data biar tombol hilang
-                    this.isLoading = false;
-                    return; 
-                }
-
-                // Persiapan data insert
-                const attendance = {
-                    employee_id: this.currentUser.id,
-                    date: jakartaDateStr,
-                    time: now.toLocaleTimeString('id-ID', options),
-                    status: status,
-                    reason: ''
-                };
-
                 const { data, error } = await supabaseClient
                     .from('attendance_records')
                     .insert([attendance])
@@ -352,7 +336,6 @@ function attendanceApp() {
 
                 if (error) throw error;
 
-                // ... kode sukses menyimpan record ke array lokal ...
                 const savedRecord = {
                     id: data[0].id,
                     employeeId: data[0].employee_id,
@@ -365,18 +348,9 @@ function attendanceApp() {
                 this.attendanceRecords.push(savedRecord);
                 this.updateAttendanceData();
                 alert('Absensi berhasil dicatat!');
-
             } catch (err) {
                 console.error('Error submitting attendance:', err);
-                
-                // ✅ TAMBAHAN 2: Tangani error duplikat secara spesifik
-                // Kode 23505 adalah kode PostgreSQL untuk unique_violation
-                if (err.code === '23505' || err.message.includes('duplicate key')) {
-                    alert('Sistem mendeteksi Anda sudah absen hari ini. Data telah diperbarui.');
-                    this.updateAttendanceData(); // Refresh tampilan
-                } else {
-                    alert(`Gagal mencatat absensi: ${err.message}`);
-                }
+                alert(`Gagal mencatat absensi: ${err.message}`);
             } finally {
                 this.isLoading = false;
             }
@@ -386,35 +360,17 @@ function attendanceApp() {
             this.isLoading = true;
             const now = new Date();
             const options = { timeZone: 'Asia/Jakarta' };
+            const jakartaDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             
-            // ✅ PERBAIKAN: Format tanggal YYYY-MM-DD yang konsisten
-            const jakartaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+            const newAttendance = {
+                employee_id: this.currentUser.id,
+                date: jakartaDate,
+                time: now.toLocaleTimeString('id-ID', options),
+                status: this.attendanceForm.type,
+                reason: this.attendanceForm.reason
+            };
 
             try {
-                // ✅ TAMBAHAN 1: Cek Duplikat
-                const { data: existingRecord } = await supabaseClient
-                    .from('attendance_records')
-                    .select('id')
-                    .eq('employee_id', this.currentUser.id)
-                    .eq('date', jakartaDateStr)
-                    .maybeSingle();
-
-                if (existingRecord) {
-                    alert('Anda tercatat sudah melakukan absensi/izin hari ini.');
-                    this.closeAttendanceModal();
-                    this.updateAttendanceData();
-                    this.isLoading = false;
-                    return;
-                }
-
-                const newAttendance = {
-                    employee_id: this.currentUser.id,
-                    date: jakartaDateStr,
-                    time: now.toLocaleTimeString('id-ID', options),
-                    status: this.attendanceForm.type,
-                    reason: this.attendanceForm.reason
-                };
-
                 const { data, error } = await supabaseClient
                     .from('attendance_records')
                     .insert([newAttendance])
@@ -422,7 +378,6 @@ function attendanceApp() {
 
                 if (error) throw error;
 
-                // ... kode sukses simpan lokal ...
                 const savedRecord = {
                     id: data[0].id,
                     employeeId: data[0].employee_id,
@@ -436,18 +391,9 @@ function attendanceApp() {
                 this.updateAttendanceData();
                 this.closeAttendanceModal();
                 alert('Absensi berhasil dicatat!');
-
             } catch (err) {
                 console.error('Error submitting attendance:', err);
-                
-                // ✅ TAMBAHAN 2: Error Handling Duplikat
-                if (err.code === '23505' || err.message.includes('duplicate key')) {
-                    alert('Anda sudah absen hari ini. Tidak bisa input data ganda.');
-                    this.closeAttendanceModal();
-                    this.updateAttendanceData();
-                } else {
-                    alert(`Gagal mencatat absensi: ${err.message}`);
-                }
+                alert(`Gagal mencatat absensi: ${err.message}`);
             } finally {
                 this.isLoading = false;
             }
